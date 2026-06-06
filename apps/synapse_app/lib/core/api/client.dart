@@ -67,9 +67,11 @@ class SynapseApiClient {
 
   /// Strips Cerebro's `{"data": [...]}` envelope for list responses.
   List<dynamic> _unwrapList(dynamic decoded) {
-    if (isCerebro && decoded is Map<String, dynamic>) {
+    if (decoded is Map<String, dynamic>) {
       final data = decoded['data'];
       if (data is List) return data;
+      final events = decoded['events'];
+      if (events is List) return events;
     }
     if (decoded is List) return decoded;
     return const [];
@@ -97,6 +99,15 @@ class SynapseApiClient {
     return CouncilDetail.fromJson(
       _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
     );
+  }
+
+  Future<String> getCouncilThreadId(String sessionId) async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('$baseUrl/v1/councils/$sessionId/thread');
+    final response = await _httpClient.get(uri, headers: headers);
+    _checkResponse(response);
+    final body = _unwrap(jsonDecode(response.body) as Map<String, dynamic>);
+    return body['thread_id'] as String;
   }
 
   Future<CreateCouncilResponse> createCouncil({
@@ -318,7 +329,9 @@ class SynapseApiClient {
     _checkResponse(response);
     final body = _unwrap(jsonDecode(response.body) as Map<String, dynamic>);
     final list = (body['devices'] as List<dynamic>?) ?? [];
-    return list.map((e) => DeviceToken.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => DeviceToken.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<DeviceToken> registerDeviceToken({
@@ -355,7 +368,9 @@ class SynapseApiClient {
     _checkResponse(response);
     final body = _unwrap(jsonDecode(response.body) as Map<String, dynamic>);
     final list = (body['items'] as List<dynamic>?) ?? [];
-    return list.map((e) => FeedItem.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => FeedItem.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   // ─── Memory (F-extend, B12) ───────────────────────────────────────────────
@@ -374,7 +389,9 @@ class SynapseApiClient {
     _checkResponse(response);
     final body = _unwrap(jsonDecode(response.body) as Map<String, dynamic>);
     final list = (body['hits'] as List<dynamic>?) ?? [];
-    return list.map((e) => MemoryHit.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => MemoryHit.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   // ─── Analytics (B8 / F-extend) ────────────────────────────────────────────
@@ -506,15 +523,11 @@ class SynapseApiClient {
     String sessionId,
     String content, {
     List<PendingHuman> humans = const [],
-  }) =>
-      _streamSse(
-        '/v1/chat/sessions/$sessionId/messages',
-        {
-          'content': content,
-          if (humans.isNotEmpty)
-            'humans': humans.map((h) => h.toJson()).toList(growable: false),
-        },
-      );
+  }) => _streamSse('/v1/chat/sessions/$sessionId/messages', {
+    'content': content,
+    if (humans.isNotEmpty)
+      'humans': humans.map((h) => h.toJson()).toList(growable: false),
+  });
 
   // -------------------------------------------------------------------------
   // Conversation editing (Phase 1B) — fork / edit / regenerate.
@@ -551,11 +564,9 @@ class SynapseApiClient {
     String sessionId,
     int messageId,
     String content,
-  ) =>
-      _streamSse(
-        '/v1/chat/sessions/$sessionId/messages/$messageId/edit',
-        {'content': content},
-      );
+  ) => _streamSse('/v1/chat/sessions/$sessionId/messages/$messageId/edit', {
+    'content': content,
+  });
 
   /// POST /v1/chat/sessions/:id/messages/:messageId/regenerate — re-runs
   /// the agent for the user message that produced the target reflection.
@@ -566,13 +577,12 @@ class SynapseApiClient {
     String sessionId,
     int messageId, {
     AgentConfig? agentConfigOverride,
-  }) =>
-      _streamSse(
-        '/v1/chat/sessions/$sessionId/messages/$messageId/regenerate',
-        agentConfigOverride == null
-            ? const <String, dynamic>{}
-            : {'agent_config_override': agentConfigOverride.toJson()},
-      );
+  }) => _streamSse(
+    '/v1/chat/sessions/$sessionId/messages/$messageId/regenerate',
+    agentConfigOverride == null
+        ? const <String, dynamic>{}
+        : {'agent_config_override': agentConfigOverride.toJson()},
+  );
 
   // -------------------------------------------------------------------------
   // Internals

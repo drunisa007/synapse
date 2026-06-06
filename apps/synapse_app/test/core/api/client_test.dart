@@ -8,7 +8,9 @@ import 'package:synapse_app/core/auth/token_store.dart';
 
 void main() {
   setUp(() {
-    SharedPreferences.setMockInitialValues({'synapse_bearer_token': 'test-token'});
+    SharedPreferences.setMockInitialValues({
+      'synapse_bearer_token': 'test-token',
+    });
   });
 
   SynapseApiClient makeClient(MockClientHandler handler) {
@@ -35,7 +37,7 @@ void main() {
               'created_at': '2026-04-01T10:00:00Z',
               'closed_at': '2026-04-01T11:00:00Z',
               'conflict_detected': false,
-            }
+            },
           ]),
           200,
         );
@@ -94,8 +96,8 @@ void main() {
                 'council_type': 'llm',
                 'created_at': '2026-04-01T10:00:00Z',
                 'conflict_detected': false,
-              }
-            ]
+              },
+            ],
           }),
           200,
         );
@@ -118,7 +120,7 @@ void main() {
               'council_type': 'llm',
               'created_at': '2026-04-01T10:00:00Z',
               'conflict_detected': false,
-            }
+            },
           ]),
           200,
         );
@@ -146,7 +148,7 @@ void main() {
               'dissent_detected': false,
               'contributions_received': 3,
               'members': [],
-            }
+            },
           }),
           200,
         );
@@ -166,7 +168,7 @@ void main() {
               'session_id': 'new-cerebro',
               'thread_id': 'thread-cerebro',
               'status': 'pending',
-            }
+            },
           }),
           201,
         );
@@ -191,9 +193,9 @@ void main() {
                   'token_type': 'ntfy',
                   'token': 'abc123',
                   'created_at': '2026-04-01T10:00:00Z',
-                }
-              ]
-            }
+                },
+              ],
+            },
           }),
           200,
         );
@@ -206,13 +208,42 @@ void main() {
     });
   });
 
+  group('SynapseApiClient.listEvents', () {
+    test('unwraps Synapse {events: [...]} thread history envelope', () async {
+      final client = makeClient((request) async {
+        expect(request.url.path, '/v1/threads/thread-1/events');
+        return http.Response(
+          jsonEncode({
+            'thread_id': 'thread-1',
+            'events': [
+              {
+                'id': 7,
+                'thread_id': 'thread-1',
+                'event_type': 'verdict',
+                'actor_id': 'system',
+                'actor_name': '',
+                'content': 'done',
+                'metadata': {'confidence_label': 'high'},
+                'created_at': '2026-04-01T10:00:00Z',
+              },
+            ],
+            'count': 1,
+          }),
+          200,
+        );
+      });
+
+      final events = await client.listEvents('thread-1');
+      expect(events.length, 1);
+      expect(events.single.eventType, 'verdict');
+      expect(events.single.content, 'done');
+    });
+  });
+
   group('SynapseApiClient error handling', () {
     test('throws ApiException on 401', () async {
       final client = makeClient((request) async {
-        return http.Response(
-          jsonEncode({'detail': 'Unauthorized'}),
-          401,
-        );
+        return http.Response(jsonEncode({'detail': 'Unauthorized'}), 401);
       });
 
       expect(
@@ -225,10 +256,7 @@ void main() {
 
     test('ApiException contains message from response body', () async {
       final client = makeClient((request) async {
-        return http.Response(
-          jsonEncode({'detail': 'Token expired'}),
-          401,
-        );
+        return http.Response(jsonEncode({'detail': 'Token expired'}), 401);
       });
 
       try {
