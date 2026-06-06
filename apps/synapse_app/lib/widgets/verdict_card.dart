@@ -96,8 +96,7 @@ class VerdictCard extends StatelessWidget {
             if (dissentDetected) ...[
               const SizedBox(height: 8),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.orange.withAlpha(30),
                   borderRadius: BorderRadius.circular(4),

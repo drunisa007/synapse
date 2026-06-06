@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../core/api/client.dart';
 import '../../core/api/models.dart';
+import '../../ui/synapse_components.dart';
+import '../../ui/synapse_shell.dart';
+import '../../ui/synapse_tokens.dart';
+import '../../widgets/conflict_banner.dart';
 import '../../widgets/council_status_badge.dart';
 import '../../widgets/deliberation_rounds_card.dart';
 import '../../widgets/verdict_card.dart';
-import '../../widgets/conflict_banner.dart';
 import '../chat/chat_screen.dart';
 
 class CouncilDetailScreen extends StatefulWidget {
@@ -40,26 +44,23 @@ class _CouncilDetailScreenState extends State<CouncilDetailScreen> {
     });
     try {
       final council = await widget.client.getCouncil(widget.sessionId);
-      if (mounted) {
-        setState(() {
-          _council = council;
-          _loading = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _council = council;
+        _loading = false;
+      });
     } on ApiException catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.message;
-          _loading = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _error = e.message;
+        _loading = false;
+      });
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.toString();
-          _loading = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
     }
   }
 
@@ -68,72 +69,97 @@ class _CouncilDetailScreenState extends State<CouncilDetailScreen> {
       await widget.client.approveCouncil(widget.sessionId);
       await _load();
     } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final council = _council;
-    final isWide = MediaQuery.of(context).size.width > 800;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          council != null
-              ? council.question.length > 50
-                  ? '${council.question.substring(0, 50)}…'
-                  : council.question
-              : 'Council',
-        ),
-        actions: [
-          if (council?.status == 'closed')
-            TextButton.icon(
-              icon: const Icon(Icons.chat_bubble_outline, size: 16),
-              label: const Text('Chat with Verdict'),
-              onPressed: () =>
-                  context.push('/councils/${widget.sessionId}/verdict'),
-            ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _load,
-            tooltip: 'Refresh',
+    return SynapseWorkspaceFrame(
+      selected: SynapseNavItem.councils,
+      title: council == null ? 'Council' : _shortTitle(council.question),
+      subtitle: council?.sessionId,
+      onBack: () => context.go('/councils'),
+      actions: [
+        if (council?.status == 'closed')
+          OutlinedButton.icon(
+            icon: const Icon(Icons.chat_bubble_outline, size: 16),
+            label: const Text('Verdict chat'),
+            onPressed: () =>
+                context.push('/councils/${widget.sessionId}/verdict'),
           ),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(_error!,
-                          style: const TextStyle(color: Colors.red)),
-                      const SizedBox(height: 12),
-                      ElevatedButton(
-                          onPressed: _load, child: const Text('Retry')),
-                    ],
-                  ),
-                )
-              : council == null
-                  ? const Center(child: Text('Council not found'))
-                  : isWide
-                      ? _WideLayout(
-                          council: council,
-                          onApprove: _handleApprove,
-                          client: widget.client,
-                        )
-                      : _NarrowLayout(
-                          council: council,
-                          onApprove: _handleApprove,
-                          client: widget.client,
-                        ),
+        if (council?.status == 'closed') const SizedBox(width: SynSpacing.sm),
+        SynIconButton(
+          icon: Icons.refresh,
+          tooltip: 'Refresh',
+          onPressed: _loading ? null : _load,
+        ),
+      ],
+      body: _buildBody(council),
     );
+  }
+
+  Widget _buildBody(CouncilDetail? council) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return SynErrorState(message: _error!, onRetry: _load);
+    }
+    if (council == null) {
+      return const SynEmptyState(
+        icon: Icons.search_off_outlined,
+        title: 'Council not found',
+        message: 'The selected council is not available.',
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 920;
+        if (!wide) {
+          return _NarrowLayout(
+            council: council,
+            onApprove: _handleApprove,
+            client: widget.client,
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.all(SynSpacing.xl),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                width: 360,
+                child: _MetaPanel(council: council, onApprove: _handleApprove),
+              ),
+              const SizedBox(width: SynSpacing.lg),
+              Expanded(
+                child: SynSurface(
+                  padding: EdgeInsets.zero,
+                  color: SynColors.surfaceMuted,
+                  child: _CouncilThreadPane(
+                    sessionId: council.sessionId,
+                    councilStatus: council.status,
+                    client: widget.client,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String _shortTitle(String question) {
+    if (question.length <= 72) return question;
+    return '${question.substring(0, 72)}...';
   }
 }
 
@@ -145,131 +171,183 @@ class _MetaPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        CouncilStatusBadge(status: council.status),
-        const SizedBox(height: 12),
-        SelectableText(
-          council.question,
-          style: const TextStyle(fontSize: 16, height: 1.5),
-        ),
-        const SizedBox(height: 16),
-        if (council.conflictDetected)
-          ConflictBanner(
-            conflictMetadata: council.conflictMetadata,
-            councilStatus: council.status,
-            onApprove: council.status == 'pending_approval'
-                ? onApprove
-                : null,
+    return SynSurface(
+      padding: EdgeInsets.zero,
+      color: SynColors.surface,
+      child: ListView(
+        padding: const EdgeInsets.all(SynSpacing.lg),
+        children: [
+          Row(
+            children: [
+              CouncilStatusBadge(status: council.status),
+              const Spacer(),
+              Text(
+                _formatDate(council.createdAt),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: SynColors.textFaint),
+              ),
+            ],
           ),
-        if (council.status == 'pending_approval' && !council.conflictDetected)
-          Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.amber.withAlpha(20),
-              border: Border.all(color: Colors.amber),
-              borderRadius: BorderRadius.circular(6),
+          const SizedBox(height: SynSpacing.lg),
+          SelectableText(
+            council.question,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(height: 1.35),
+          ),
+          const SizedBox(height: SynSpacing.lg),
+          if (council.status == 'failed')
+            SynNotice(
+              icon: Icons.error_outline,
+              title: 'Council failed',
+              message:
+                  council.failureReason ??
+                  'The backend marked this council as failed.',
+              color: SynColors.red,
             ),
-            child: Row(
+          if (council.conflictDetected) ...[
+            if (council.status == 'failed')
+              const SizedBox(height: SynSpacing.md),
+            ConflictBanner(
+              conflictMetadata: council.conflictMetadata,
+              councilStatus: council.status,
+              onApprove: council.status == 'pending_approval'
+                  ? onApprove
+                  : null,
+            ),
+          ],
+          if (council.status == 'pending_approval' &&
+              !council.conflictDetected) ...[
+            if (council.status == 'failed')
+              const SizedBox(height: SynSpacing.md),
+            SynNotice(
+              icon: Icons.rule_folder_outlined,
+              title: 'Needs approval',
+              message:
+                  'Review the generated verdict before closing this council.',
+              color: SynColors.amber,
+              action: FilledButton(
+                onPressed: onApprove,
+                child: const Text('Approve'),
+              ),
+            ),
+          ],
+          if (council.status == 'waiting_contributions') ...[
+            const SizedBox(height: SynSpacing.md),
+            SynNotice(
+              icon: Icons.groups_2_outlined,
+              title: 'Awaiting contributions',
+              message:
+                  '${council.contributionsReceived} of ${council.quorum ?? '?'} required.',
+              color: SynColors.magenta,
+            ),
+          ],
+          const SizedBox(height: SynSpacing.lg),
+          SynSurface(
+            color: SynColors.surfaceMuted,
+            child: Column(
               children: [
-                const Icon(Icons.pending, color: Colors.amber, size: 16),
-                const SizedBox(width: 8),
-                const Expanded(
-                    child: Text('Pending approval',
-                        style: TextStyle(color: Colors.amber))),
-                TextButton(
-                  onPressed: onApprove,
-                  child: const Text('Approve'),
+                SynMetaRow(label: 'Type', value: council.councilType),
+                const SizedBox(height: SynSpacing.sm),
+                SynMetaRow(
+                  label: 'Confidence',
+                  value: council.confidenceLabel ?? 'Not available',
+                ),
+                const SizedBox(height: SynSpacing.sm),
+                SynMetaRow(
+                  label: 'Consensus',
+                  value: council.consensusScore == null
+                      ? 'Not available'
+                      : '${(council.consensusScore! * 100).round()}%',
                 ),
               ],
             ),
           ),
-        if (council.status == 'waiting_contributions')
-          Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.purple.withAlpha(20),
-              border: Border.all(color: Colors.purple),
-              borderRadius: BorderRadius.circular(6),
+          if (council.members.isNotEmpty) ...[
+            const SizedBox(height: SynSpacing.lg),
+            Text('Members', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: SynSpacing.sm),
+            ...council.members.map((member) => _MemberTile(member: member)),
+          ],
+          if (council.verdict != null) ...[
+            const SizedBox(height: SynSpacing.lg),
+            VerdictCard(
+              verdict: council.verdict,
+              consensusScore: council.consensusScore,
+              confidenceLabel: council.confidenceLabel,
+              dissentDetected: council.dissentDetected,
             ),
-            child: Text(
-              'Contributions: ${council.contributionsReceived} / ${council.quorum ?? '?'}',
-              style: const TextStyle(color: Colors.purple),
-            ),
-          ),
-        if (council.members.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          const Text('Members',
-              style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                  color: Colors.white70)),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: council.members.map((m) {
-              final name = m['name']?.toString() ?? 'Unknown';
-              final role = m['role']?.toString();
-              return Chip(
-                label: Text(role != null ? '$name ($role)' : name,
-                    style: const TextStyle(fontSize: 11)),
-                visualDensity: VisualDensity.compact,
-              );
-            }).toList(),
-          ),
+          ],
+          if (council.deliberationRounds.isNotEmpty) ...[
+            const SizedBox(height: SynSpacing.lg),
+            DeliberationRoundsCard(rounds: council.deliberationRounds),
+          ],
         ],
-        if (council.verdict != null) ...[
-          const SizedBox(height: 16),
-          VerdictCard(
-            verdict: council.verdict,
-            consensusScore: council.consensusScore,
-            confidenceLabel: council.confidenceLabel,
-            dissentDetected: council.dissentDetected,
-          ),
-        ],
-        if (council.deliberationRounds.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          DeliberationRoundsCard(rounds: council.deliberationRounds),
-        ],
-      ],
+      ),
     );
+  }
+
+  String _formatDate(String isoDate) {
+    try {
+      final dt = DateTime.parse(isoDate).toLocal();
+      return '${dt.month}/${dt.day}/${dt.year}';
+    } catch (_) {
+      return isoDate;
+    }
   }
 }
 
-class _WideLayout extends StatelessWidget {
-  final CouncilDetail council;
-  final VoidCallback onApprove;
-  final SynapseApiClient client;
+class _MemberTile extends StatelessWidget {
+  final Map<String, dynamic> member;
 
-  const _WideLayout({
-    required this.council,
-    required this.onApprove,
-    required this.client,
-  });
+  const _MemberTile({required this.member});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 320,
-          child: _MetaPanel(council: council, onApprove: onApprove),
-        ),
-        const VerticalDivider(width: 1),
-        Expanded(
-          child: ChatScreen(
-            sessionId: council.sessionId,
-            threadId: council.sessionId,
-            councilStatus: council.status,
-            client: client,
+    final name = member['name']?.toString() ?? 'Unknown';
+    final role = member['role']?.toString();
+    final model = member['model_id']?.toString();
+    return Container(
+      margin: const EdgeInsets.only(bottom: SynSpacing.sm),
+      padding: const EdgeInsets.all(SynSpacing.md),
+      decoration: BoxDecoration(
+        color: SynColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(SynRadii.lg),
+        border: Border.all(color: SynColors.border),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.person_outline,
+            size: 18,
+            color: SynColors.textMuted,
           ),
-        ),
-      ],
+          const SizedBox(width: SynSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                if (role != null || model != null)
+                  Text(
+                    role ?? model!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: SynColors.textMuted),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -300,18 +378,63 @@ class _NarrowLayout extends StatelessWidget {
           Expanded(
             child: TabBarView(
               children: [
-                _MetaPanel(council: council, onApprove: onApprove),
-                ChatScreen(
-                  sessionId: council.sessionId,
-                  threadId: council.sessionId,
-                  councilStatus: council.status,
-                  client: client,
+                Padding(
+                  padding: const EdgeInsets.all(SynSpacing.lg),
+                  child: _MetaPanel(council: council, onApprove: onApprove),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(SynSpacing.lg),
+                  child: SynSurface(
+                    padding: EdgeInsets.zero,
+                    color: SynColors.surfaceMuted,
+                    child: _CouncilThreadPane(
+                      sessionId: council.sessionId,
+                      councilStatus: council.status,
+                      client: client,
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CouncilThreadPane extends StatelessWidget {
+  final String sessionId;
+  final String councilStatus;
+  final SynapseApiClient client;
+
+  const _CouncilThreadPane({
+    required this.sessionId,
+    required this.councilStatus,
+    required this.client,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<String>(
+      future: client.getCouncilThreadId(sessionId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError || snapshot.data == null) {
+          return SynErrorState(
+            title: 'Thread unavailable',
+            message: snapshot.error?.toString() ?? 'Thread not found',
+          );
+        }
+        return ChatScreen(
+          sessionId: sessionId,
+          threadId: snapshot.data!,
+          councilStatus: councilStatus,
+          client: client,
+        );
+      },
     );
   }
 }
