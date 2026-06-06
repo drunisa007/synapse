@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../core/api/client.dart';
 import '../../core/api/models.dart';
+import '../../ui/synapse_components.dart';
+import '../../ui/synapse_tokens.dart';
 import '../../widgets/verdict_card.dart';
 import '../../widgets/thread_entry.dart';
 import '../../widgets/directive_input.dart';
@@ -21,6 +23,7 @@ class VerdictChatScreen extends StatefulWidget {
 
 class _VerdictChatScreenState extends State<VerdictChatScreen> {
   CouncilDetail? _council;
+  String? _threadId;
   List<ThreadEvent> _events = [];
   final List<ThreadEvent> _chatHistory = [];
   final ScrollController _scrollController = ScrollController();
@@ -36,10 +39,14 @@ class _VerdictChatScreenState extends State<VerdictChatScreen> {
   Future<void> _load() async {
     try {
       final council = await widget.client.getCouncil(widget.sessionId);
-      final events = await widget.client.listEvents(council.sessionId);
+      final threadId = await widget.client.getCouncilThreadId(
+        council.sessionId,
+      );
+      final events = await widget.client.listEvents(threadId);
       if (mounted) {
         setState(() {
           _council = council;
+          _threadId = threadId;
           _events = events;
           _loading = false;
         });
@@ -77,7 +84,7 @@ class _VerdictChatScreenState extends State<VerdictChatScreen> {
   Future<void> _handleChat(String message) async {
     final userEvent = ThreadEvent(
       id: DateTime.now().millisecondsSinceEpoch,
-      threadId: widget.sessionId,
+      threadId: _threadId ?? widget.sessionId,
       eventType: 'user_message',
       actorId: 'user',
       actorName: 'User',
@@ -88,11 +95,13 @@ class _VerdictChatScreenState extends State<VerdictChatScreen> {
     setState(() => _chatHistory.add(userEvent));
 
     try {
-      final response =
-          await widget.client.chatWithVerdict(widget.sessionId, message);
+      final response = await widget.client.chatWithVerdict(
+        widget.sessionId,
+        message,
+      );
       final answerEvent = ThreadEvent(
         id: DateTime.now().millisecondsSinceEpoch + 1,
-        threadId: widget.sessionId,
+        threadId: _threadId ?? widget.sessionId,
         eventType: 'member_response',
         actorId: 'assistant',
         actorName: 'Assistant',
@@ -106,9 +115,9 @@ class _VerdictChatScreenState extends State<VerdictChatScreen> {
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     }
   }
@@ -123,49 +132,57 @@ class _VerdictChatScreenState extends State<VerdictChatScreen> {
   Widget build(BuildContext context) {
     final council = _council;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          council != null
-              ? council.question.length > 50
-                  ? '${council.question.substring(0, 50)}…'
-                  : council.question
-              : 'Verdict Chat',
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_error != null) {
+      return SynErrorState(
+        title: 'Could not load verdict chat',
+        message: _error!,
+        onRetry: _load,
+      );
+    }
+    return Column(
+      children: [
+        if (council != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              SynSpacing.xl,
+              SynSpacing.lg,
+              SynSpacing.xl,
+              SynSpacing.sm,
+            ),
+            child: VerdictCard(
+              verdict: council.verdict,
+              consensusScore: council.consensusScore,
+              confidenceLabel: council.confidenceLabel,
+              dissentDetected: council.dissentDetected,
+            ),
+          ),
+        Expanded(
+          child: ListView.builder(
+            controller: _scrollController,
+            padding: const EdgeInsets.fromLTRB(
+              SynSpacing.xl,
+              SynSpacing.sm,
+              SynSpacing.xl,
+              SynSpacing.lg,
+            ),
+            itemCount: _events.length + _chatHistory.length,
+            itemBuilder: (context, index) {
+              final allItems = [..._events, ..._chatHistory];
+              return ThreadEntry(event: allItems[index]);
+            },
+          ),
         ),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(
-                  child: Text(_error!,
-                      style: const TextStyle(color: Colors.red)))
-              : Column(
-                  children: [
-                    if (council != null)
-                      Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: VerdictCard(
-                          verdict: council.verdict,
-                          consensusScore: council.consensusScore,
-                          confidenceLabel: council.confidenceLabel,
-                          dissentDetected: council.dissentDetected,
-                        ),
-                      ),
-                    Expanded(
-                      child: ListView.builder(
-                        controller: _scrollController,
-                        itemCount: _events.length + _chatHistory.length,
-                        itemBuilder: (context, index) {
-                          final allItems = [..._events, ..._chatHistory];
-                          return ThreadEntry(event: allItems[index]);
-                        },
-                      ),
-                    ),
-                    DirectiveInput(
-                      onSend: _handleChat,
-                    ),
-                  ],
-                ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            SynSpacing.xl,
+            0,
+            SynSpacing.xl,
+            SynSpacing.lg,
+          ),
+          child: DirectiveInput(onSend: _handleChat),
+        ),
+      ],
     );
   }
 }

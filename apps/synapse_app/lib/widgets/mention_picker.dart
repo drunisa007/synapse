@@ -105,7 +105,10 @@ class MentionPicker extends StatelessWidget {
                   for (final u in users)
                     _UserRow(user: u, onTap: () => _pickUser(u)),
                   if (inviteAvailable)
-                    _InviteRow(email: trimmed, onTap: () => _pickInvite(trimmed)),
+                    _InviteRow(
+                      email: trimmed,
+                      onTap: () => _pickInvite(trimmed),
+                    ),
                 ],
               ),
             ),
