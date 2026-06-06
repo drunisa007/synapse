@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../core/api/client.dart';
+import '../../ui/synapse_components.dart';
+import '../../ui/synapse_tokens.dart';
 
 /// W7 / B8 — analytics overview. Three cards:
 ///   * Consensus distribution (high/medium/low/unscored bars)
@@ -46,37 +48,57 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Analytics')),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        child: FutureBuilder<_AnalyticsData>(
-          future: _future,
-          builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snap.hasError) {
-              return ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                children: [Text('Error: ${snap.error}', style: const TextStyle(color: Colors.red))],
-              );
-            }
-            final d = snap.data!;
-            return ListView(
-              padding: const EdgeInsets.all(12),
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: [
-                _ConsensusCard(payload: d.consensus),
-                const SizedBox(height: 12),
-                _VelocityCard(payload: d.velocity),
-                const SizedBox(height: 12),
-                _MembersCard(rows: d.members),
-              ],
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: FutureBuilder<_AnalyticsData>(
+        future: _future,
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snap.hasError) {
+            return SynErrorState(
+              title: 'Could not load analytics',
+              message: snap.error.toString(),
+              onRetry: _refresh,
             );
-          },
-        ),
+          }
+          final d = snap.data!;
+          return ListView(
+            padding: const EdgeInsets.all(SynSpacing.xl),
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final narrow = constraints.maxWidth < 820;
+                  final cards = [
+                    _ConsensusCard(payload: d.consensus),
+                    _VelocityCard(payload: d.velocity),
+                  ];
+                  if (narrow) {
+                    return Column(
+                      children: [
+                        cards[0],
+                        const SizedBox(height: SynSpacing.md),
+                        cards[1],
+                      ],
+                    );
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: cards[0]),
+                      const SizedBox(width: SynSpacing.md),
+                      Expanded(child: cards[1]),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: SynSpacing.md),
+              _MembersCard(rows: d.members),
+            ],
+          );
+        },
       ),
     );
   }
@@ -86,7 +108,11 @@ class _AnalyticsData {
   final Map<String, dynamic> consensus;
   final Map<String, dynamic> velocity;
   final List<dynamic> members;
-  _AnalyticsData({required this.consensus, required this.velocity, required this.members});
+  _AnalyticsData({
+    required this.consensus,
+    required this.velocity,
+    required this.members,
+  });
 }
 
 class _ConsensusCard extends StatelessWidget {
@@ -102,46 +128,67 @@ class _ConsensusCard extends StatelessWidget {
     final low = (data['low'] as num?)?.toInt() ?? 0;
     final unscored = (data['unscored'] as num?)?.toInt() ?? 0;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Consensus distribution', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            Text('$total councils total', style: const TextStyle(fontSize: 11, color: Colors.grey)),
-            const SizedBox(height: 12),
-            _bar('High (≥70%)', high, total, Colors.green),
-            const SizedBox(height: 6),
-            _bar('Medium (40–70%)', medium, total, Colors.amber),
-            const SizedBox(height: 6),
-            _bar('Low (<40%)', low, total, Colors.red.shade300),
-            const SizedBox(height: 6),
-            _bar('Unscored', unscored, total, Colors.grey.shade400),
-          ],
-        ),
+    return SynSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Consensus distribution',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          Text(
+            '$total councils total',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: SynColors.textMuted),
+          ),
+          const SizedBox(height: 12),
+          _bar(context, 'High (>=70%)', high, total, SynColors.green),
+          const SizedBox(height: 6),
+          _bar(context, 'Medium (40-70%)', medium, total, SynColors.amber),
+          const SizedBox(height: 6),
+          _bar(context, 'Low (<40%)', low, total, SynColors.red),
+          const SizedBox(height: 6),
+          _bar(context, 'Unscored', unscored, total, SynColors.textFaint),
+        ],
       ),
     );
   }
 
-  Widget _bar(String label, int n, int total, Color colour) {
+  Widget _bar(
+    BuildContext context,
+    String label,
+    int n,
+    int total,
+    Color colour,
+  ) {
     final pct = total == 0 ? 0.0 : n / total;
     return Row(
       children: [
-        SizedBox(width: 130, child: Text(label, style: const TextStyle(fontSize: 11))),
+        SizedBox(
+          width: 130,
+          child: Text(label, style: Theme.of(context).textTheme.bodySmall),
+        ),
         Expanded(
           child: ClipRRect(
             borderRadius: BorderRadius.circular(2),
             child: LinearProgressIndicator(
               value: pct,
               minHeight: 6,
-              backgroundColor: Colors.grey.shade200,
+              backgroundColor: SynColors.surfaceRaised,
               valueColor: AlwaysStoppedAnimation(colour),
             ),
           ),
         ),
         const SizedBox(width: 8),
-        SizedBox(width: 28, child: Text('$n', style: const TextStyle(fontSize: 11), textAlign: TextAlign.right)),
+        SizedBox(
+          width: 28,
+          child: Text(
+            '$n',
+            style: Theme.of(context).textTheme.bodySmall,
+            textAlign: TextAlign.right,
+          ),
+        ),
       ],
     );
   }
@@ -154,43 +201,54 @@ class _VelocityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final points = (payload['data'] as List<dynamic>?) ?? [];
-    final counts = points.map((e) => ((e['count'] as num?) ?? 0).toInt()).toList();
-    final maxCount = counts.isEmpty ? 1 : counts.reduce((a, b) => a > b ? a : b);
+    final counts = points
+        .map((e) => ((e['count'] as num?) ?? 0).toInt())
+        .toList();
+    final maxCount = counts.isEmpty
+        ? 1
+        : counts.reduce((a, b) => a > b ? a : b);
     final total = counts.fold<int>(0, (a, b) => a + b);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Decision velocity (14d)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            Text('$total councils closed', style: const TextStyle(fontSize: 11, color: Colors.grey)),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 56,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: counts
-                    .map(
-                      (c) => Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 1.5),
-                          child: Container(
-                            height: 56 * (maxCount == 0 ? 0 : c / maxCount),
-                            decoration: BoxDecoration(
-                              color: Colors.indigo.shade300,
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
+    return SynSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Decision velocity (14d)',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          Text(
+            '$total councils closed',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: SynColors.textMuted),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 56,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: counts
+                  .map(
+                    (c) => Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 1.5),
+                        child: Container(
+                          height: 56 * (maxCount == 0 ? 0 : c / maxCount),
+                          decoration: const BoxDecoration(
+                            color: SynColors.primary,
+                            borderRadius: BorderRadius.vertical(
+                              top: Radius.circular(2),
                             ),
                           ),
                         ),
                       ),
-                    )
-                    .toList(),
-              ),
+                    ),
+                  )
+                  .toList(),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -203,36 +261,44 @@ class _MembersCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (rows.isEmpty) {
-      return const Card(
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Text('No member data yet.', style: TextStyle(color: Colors.grey)),
-        ),
+      return const SynEmptyState(
+        icon: Icons.groups_2_outlined,
+        title: 'No member data yet',
+        message: 'Participation analytics will appear after councils run.',
       );
     }
-    return Card(
+    return SynSurface(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
-            child: Text('Top members', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-          ),
+          Text('Top members', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: SynSpacing.md),
           ...rows.take(5).map((row) {
             final m = row as Map<String, dynamic>;
-            final name = (m['member_name'] ?? m['member_id'] ?? '—').toString();
+            final name = (m['member_name'] ?? m['member_id'] ?? '-').toString();
             final n = (m['councils_participated'] as num?)?.toInt() ?? 0;
             final cs = (m['avg_consensus_score'] as num?)?.toDouble();
-            return ListTile(
-              dense: true,
-              title: Text(name, style: const TextStyle(fontSize: 13)),
-              subtitle: Text(
-                '$n councils${cs == null ? '' : '  ·  ${(cs * 100).round()}% avg consensus'}',
-                style: const TextStyle(fontSize: 11),
+            return Padding(
+              padding: const EdgeInsets.only(bottom: SynSpacing.sm),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Text(
+                    '$n councils${cs == null ? '' : ' / ${(cs * 100).round()}% avg'}',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: SynColors.textMuted),
+                  ),
+                ],
               ),
             );
           }),
-          const SizedBox(height: 8),
         ],
       ),
     );

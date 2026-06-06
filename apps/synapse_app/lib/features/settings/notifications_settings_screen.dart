@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/api/client.dart';
 import '../../core/api/models.dart';
 import '../../core/notifications/notification_service.dart';
+import '../../ui/synapse_components.dart';
+import '../../ui/synapse_tokens.dart';
 
 /// Settings page for notification preferences + ntfy device registration.
 ///
@@ -22,10 +24,12 @@ class NotificationsSettingsScreen extends StatefulWidget {
   });
 
   @override
-  State<NotificationsSettingsScreen> createState() => _NotificationsSettingsScreenState();
+  State<NotificationsSettingsScreen> createState() =>
+      _NotificationsSettingsScreenState();
 }
 
-class _NotificationsSettingsScreenState extends State<NotificationsSettingsScreen> {
+class _NotificationsSettingsScreenState
+    extends State<NotificationsSettingsScreen> {
   NotificationPreferences? _prefs;
   List<DeviceToken>? _devices;
   String? _topic;
@@ -90,14 +94,14 @@ class _NotificationsSettingsScreenState extends State<NotificationsSettingsScree
         pushEnabled: _pushEnabled,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Preferences saved')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Preferences saved')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Save failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Save failed: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -107,7 +111,9 @@ class _NotificationsSettingsScreenState extends State<NotificationsSettingsScree
     if (_topic == null) return;
     setState(() => _busy = true);
     try {
-      final label = _labelCtrl.text.trim().isEmpty ? null : _labelCtrl.text.trim();
+      final label = _labelCtrl.text.trim().isEmpty
+          ? null
+          : _labelCtrl.text.trim();
       if (label != null) {
         await widget.notificationService.setDeviceLabel(label);
       }
@@ -120,14 +126,14 @@ class _NotificationsSettingsScreenState extends State<NotificationsSettingsScree
       await widget.notificationService.startListening();
       _devices = await widget.apiClient.listDeviceTokens();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Device registered')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Device registered')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Register failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Register failed: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -140,9 +146,9 @@ class _NotificationsSettingsScreenState extends State<NotificationsSettingsScree
       _devices = await widget.apiClient.listDeviceTokens();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Delete failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -150,149 +156,144 @@ class _NotificationsSettingsScreenState extends State<NotificationsSettingsScree
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Notifications')),
-      body: _busy && _prefs == null
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text('Error: $_error', style: const TextStyle(color: Colors.red)),
-                )
-              : ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    _channelsCard(),
-                    const SizedBox(height: 16),
-                    _thisDeviceCard(),
-                    const SizedBox(height: 16),
-                    if (_devices != null && _devices!.isNotEmpty) _registeredDevicesCard(),
-                  ],
-                ),
+    if (_busy && _prefs == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return SynErrorState(
+        title: 'Could not load notification settings',
+        message: _error!,
+        onRetry: _load,
+      );
+    }
+    return ListView(
+      padding: const EdgeInsets.all(SynSpacing.xl),
+      children: [
+        _channelsCard(),
+        const SizedBox(height: SynSpacing.md),
+        _thisDeviceCard(),
+        const SizedBox(height: SynSpacing.md),
+        if (_devices != null && _devices!.isNotEmpty) _registeredDevicesCard(),
+      ],
     );
   }
 
-  Widget _channelsCard() => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Channels', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-              const SizedBox(height: 12),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Email'),
-                subtitle: const Text('Receive verdict summaries via email'),
-                value: _emailEnabled,
-                onChanged: (v) => setState(() => _emailEnabled = v),
-              ),
-              if (_emailEnabled)
-                TextField(
-                  controller: _emailCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Email address',
-                    hintText: 'you@example.com',
-                  ),
-                  keyboardType: TextInputType.emailAddress,
-                ),
-              const Divider(),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Mobile push (FCM / APNs)'),
-                subtitle: const Text(
-                  'Wake your phone for verdicts and async-council nudges.',
-                ),
-                value: _pushEnabled,
-                onChanged: (v) => setState(() => _pushEnabled = v),
-              ),
-              const Divider(),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('ntfy fallback'),
-                subtitle: const Text(
-                  'Self-hosted topic fallback when FCM/APNs aren\'t configured.',
-                ),
-                value: _ntfyEnabled,
-                onChanged: (v) => setState(() => _ntfyEnabled = v),
-              ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerRight,
-                child: ElevatedButton(
-                  onPressed: _busy ? null : _savePrefs,
-                  child: const Text('Save preferences'),
-                ),
-              ),
-            ],
+  Widget _channelsCard() => SynSurface(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Channels', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 12),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Email'),
+          subtitle: const Text('Receive verdict summaries via email'),
+          value: _emailEnabled,
+          onChanged: (v) => setState(() => _emailEnabled = v),
+        ),
+        if (_emailEnabled)
+          TextField(
+            controller: _emailCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Email address',
+              hintText: 'you@example.com',
+            ),
+            keyboardType: TextInputType.emailAddress,
+          ),
+        const Divider(),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Mobile push (FCM / APNs)'),
+          subtitle: const Text(
+            'Wake your phone for verdicts and async-council nudges.',
+          ),
+          value: _pushEnabled,
+          onChanged: (v) => setState(() => _pushEnabled = v),
+        ),
+        const Divider(),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('ntfy fallback'),
+          subtitle: const Text(
+            'Self-hosted topic fallback when FCM/APNs aren\'t configured.',
+          ),
+          value: _ntfyEnabled,
+          onChanged: (v) => setState(() => _ntfyEnabled = v),
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerRight,
+          child: ElevatedButton(
+            onPressed: _busy ? null : _savePrefs,
+            child: const Text('Save preferences'),
           ),
         ),
-      );
+      ],
+    ),
+  );
 
-  Widget _thisDeviceCard() => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('This device', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-              const SizedBox(height: 4),
-              const Text(
-                'Register this device to receive verdict pushes via ntfy.',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-              const SizedBox(height: 12),
-              SelectableText(
-                'Topic: ${_topic ?? "—"}',
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _labelCtrl,
-                decoration: const InputDecoration(labelText: 'Device label'),
-              ),
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerRight,
-                child: OutlinedButton.icon(
-                  onPressed: _busy ? null : _registerDevice,
-                  icon: const Icon(Icons.app_registration, size: 16),
-                  label: const Text('Register this device'),
-                ),
-              ),
-            ],
+  Widget _thisDeviceCard() => SynSurface(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('This device', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 4),
+        const Text(
+          'Register this device to receive verdict pushes via ntfy.',
+          style: TextStyle(fontSize: 12, color: Colors.grey),
+        ),
+        const SizedBox(height: 12),
+        SelectableText(
+          'Topic: ${_topic ?? "—"}',
+          style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _labelCtrl,
+          decoration: const InputDecoration(labelText: 'Device label'),
+        ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerRight,
+          child: OutlinedButton.icon(
+            onPressed: _busy ? null : _registerDevice,
+            icon: const Icon(Icons.app_registration, size: 16),
+            label: const Text('Register this device'),
           ),
         ),
-      );
+      ],
+    ),
+  );
 
-  Widget _registeredDevicesCard() => Card(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
-              child: Text(
-                'Registered devices',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-            ),
-            ..._devices!.map(
-              (d) => ListTile(
-                title: Text(d.deviceLabel ?? 'No label', style: const TextStyle(fontSize: 13)),
-                subtitle: Text(
-                  d.token,
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 10),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline, size: 20),
-                  onPressed: _busy ? null : () => _deleteDevice(d.id),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
+  Widget _registeredDevicesCard() => SynSurface(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Registered devices',
+          style: Theme.of(context).textTheme.titleSmall,
         ),
-      );
+        const SizedBox(height: SynSpacing.sm),
+        ..._devices!.map(
+          (d) => ListTile(
+            title: Text(
+              d.deviceLabel ?? 'No label',
+              style: const TextStyle(fontSize: 13),
+            ),
+            subtitle: Text(
+              d.token,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 10),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: IconButton(
+              icon: const Icon(Icons.delete_outline, size: 20),
+              onPressed: _busy ? null : () => _deleteDevice(d.id),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+      ],
+    ),
+  );
 }

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/api/client.dart';
 import '../../core/api/models.dart';
+import '../../ui/synapse_components.dart';
+import '../../ui/synapse_tokens.dart';
 
 /// Notification feed screen — lists verdicts, summons, in-progress, and
 /// pending-approval items for the current user. Polls the
@@ -24,7 +27,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     _future = _load();
   }
 
-  Future<List<FeedItem>> _load() => widget.apiClient.getNotificationFeed(limit: 30);
+  Future<List<FeedItem>> _load() =>
+      widget.apiClient.getNotificationFeed(limit: 30);
 
   Future<void> _refresh() async {
     setState(() {
@@ -34,31 +38,37 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Notifications')),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        child: FutureBuilder<List<FeedItem>>(
-          future: _future,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snapshot.hasError) {
-              return _ErrorBanner(message: snapshot.error.toString(), onRetry: _refresh);
-            }
-            final items = snapshot.data ?? [];
-            if (items.isEmpty) {
-              return const _EmptyState();
-            }
-            return ListView.separated(
-              physics: const AlwaysScrollableScrollPhysics(),
-              itemCount: items.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, i) => _FeedItemTile(item: items[i]),
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: FutureBuilder<List<FeedItem>>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return SynErrorState(
+              title: 'Could not load notifications',
+              message: snapshot.error.toString(),
+              onRetry: _refresh,
             );
-          },
-        ),
+          }
+          final items = snapshot.data ?? [];
+          if (items.isEmpty) {
+            return const SynEmptyState(
+              icon: Icons.notifications_off_outlined,
+              title: 'No notifications yet',
+              message: 'Verdicts, summons, and approvals will appear here.',
+            );
+          }
+          return ListView.separated(
+            padding: const EdgeInsets.all(SynSpacing.xl),
+            physics: const AlwaysScrollableScrollPhysics(),
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const SizedBox(height: SynSpacing.sm),
+            itemBuilder: (context, i) => _FeedItemTile(item: items[i]),
+          );
+        },
       ),
     );
   }
@@ -71,20 +81,20 @@ class _FeedItemTile extends StatelessWidget {
   Color _badgeColour(String type, ColorScheme cs) {
     switch (type) {
       case 'verdict_ready':
-        return Colors.green.shade700;
+        return SynColors.green;
       case 'pending_approval':
-        return Colors.amber.shade700;
+        return SynColors.amber;
       case 'summon_requested':
-        return Colors.indigo.shade400;
+        return SynColors.primary;
       case 'awaited_contribution':
         // Distinct from `summon_requested` — that's the operator-voice
         // ("your council is waiting for humans"); this one is the
         // participant-voice ("you are one of those humans"). Hotter
         // colour to reflect action required of THIS user. Matches the
         // Svelte web side (rose-500/15 token).
-        return Colors.pink.shade400;
+        return SynColors.magenta;
       case 'in_progress':
-        return cs.outline;
+        return SynColors.cyan;
       default:
         return cs.outline;
     }
@@ -112,81 +122,70 @@ class _FeedItemTile extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final badge = _badgeColour(item.type, cs);
 
-    return ListTile(
-      leading: CircleAvatar(backgroundColor: badge, radius: 6),
-      title: Text(
-        item.question,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontSize: 14),
-      ),
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 4),
-        child: Wrap(
-          spacing: 6,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: badge.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                _label(item.type),
-                style: TextStyle(fontSize: 11, color: badge, fontWeight: FontWeight.w500),
-              ),
-            ),
-            if (item.confidenceLabel != null)
-              Text('· ${item.confidenceLabel}', style: const TextStyle(fontSize: 11)),
-            if (item.consensusScore != null)
-              Text(
-                '· ${(item.consensusScore! * 100).round()}% consensus',
-                style: const TextStyle(fontSize: 11),
-              ),
-          ],
-        ),
-      ),
-      trailing: const Icon(Icons.chevron_right, size: 18),
-      onTap: () {
-        Navigator.of(context).pushNamed('/councils/${item.councilId}');
-      },
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      children: const [
-        SizedBox(height: 120),
-        Icon(Icons.notifications_off, size: 40, color: Colors.grey),
-        SizedBox(height: 12),
-        Center(child: Text('No notifications yet')),
-        Center(child: Text('Verdicts and summons will appear here', style: TextStyle(color: Colors.grey, fontSize: 12))),
-      ],
-    );
-  }
-}
-
-class _ErrorBanner extends StatelessWidget {
-  final String message;
-  final Future<void> Function() onRetry;
-  const _ErrorBanner({required this.message, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return SynSurface(
+      padding: const EdgeInsets.all(SynSpacing.md),
+      onTap: () => context.go('/councils/${item.councilId}'),
+      child: Row(
         children: [
-          Text('Could not load: $message', style: const TextStyle(color: Colors.red)),
-          const SizedBox(height: 8),
-          OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: badge, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: SynSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.question,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: SynSpacing.sm),
+                Wrap(
+                  spacing: SynSpacing.sm,
+                  runSpacing: SynSpacing.xs,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: badge.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(SynRadii.sm),
+                      ),
+                      child: Text(
+                        _label(item.type),
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: badge,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    if (item.confidenceLabel != null)
+                      Text(
+                        item.confidenceLabel!,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: SynColors.textMuted,
+                        ),
+                      ),
+                    if (item.consensusScore != null)
+                      Text(
+                        '${(item.consensusScore! * 100).round()}% consensus',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: SynColors.textMuted,
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: SynSpacing.md),
+          const Icon(Icons.chevron_right, size: 18, color: SynColors.textMuted),
         ],
       ),
     );
