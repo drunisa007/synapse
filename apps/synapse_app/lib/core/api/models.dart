@@ -7,6 +7,7 @@ class CouncilSummary {
   final String? confidenceLabel;
   final String createdAt;
   final String? closedAt;
+  final String? failureReason;
   final bool conflictDetected;
 
   const CouncilSummary({
@@ -18,6 +19,7 @@ class CouncilSummary {
     this.confidenceLabel,
     required this.createdAt,
     this.closedAt,
+    this.failureReason,
     required this.conflictDetected,
   });
 
@@ -31,6 +33,7 @@ class CouncilSummary {
       confidenceLabel: json['confidence_label'] as String?,
       createdAt: json['created_at'] as String,
       closedAt: json['closed_at'] as String?,
+      failureReason: json['failure_reason'] as String?,
       conflictDetected: (json['conflict_detected'] as bool?) ?? false,
     );
   }
@@ -47,6 +50,7 @@ class CouncilDetail extends CouncilSummary {
   final String? runAt;
   final List<Map<String, dynamic>> members;
   final Map<String, dynamic>? conflictMetadata;
+
   /// Red team + multi-round critique rounds. Empty when the council ran
   /// in standard mode. See docs/_design/realtime.md §5.
   final List<DeliberationRound> deliberationRounds;
@@ -60,6 +64,7 @@ class CouncilDetail extends CouncilSummary {
     super.confidenceLabel,
     required super.createdAt,
     super.closedAt,
+    super.failureReason,
     required super.conflictDetected,
     this.verdict,
     required this.dissentDetected,
@@ -75,17 +80,21 @@ class CouncilDetail extends CouncilSummary {
   });
 
   factory CouncilDetail.fromJson(Map<String, dynamic> json) {
-    final members = (json['members'] as List<dynamic>?)
+    final members =
+        (json['members'] as List<dynamic>?)
             ?.map((m) => Map<String, dynamic>.from(m as Map))
             .toList() ??
         [];
     final conflictMeta = json['conflict_metadata'] != null
         ? Map<String, dynamic>.from(json['conflict_metadata'] as Map)
         : null;
-    final rounds = (json['deliberation_rounds'] as List<dynamic>?)
-            ?.map((r) => DeliberationRound.fromJson(
-                  Map<String, dynamic>.from(r as Map),
-                ))
+    final rounds =
+        (json['deliberation_rounds'] as List<dynamic>?)
+            ?.map(
+              (r) => DeliberationRound.fromJson(
+                Map<String, dynamic>.from(r as Map),
+              ),
+            )
             .toList() ??
         const <DeliberationRound>[];
 
@@ -98,6 +107,7 @@ class CouncilDetail extends CouncilSummary {
       confidenceLabel: json['confidence_label'] as String?,
       createdAt: json['created_at'] as String,
       closedAt: json['closed_at'] as String?,
+      failureReason: json['failure_reason'] as String?,
       conflictDetected: (json['conflict_detected'] as bool?) ?? false,
       verdict: json['verdict'] as String?,
       dissentDetected: (json['dissent_detected'] as bool?) ?? false,
@@ -140,9 +150,10 @@ class DeliberationRound {
   factory DeliberationRound.fromJson(Map<String, dynamic> json) {
     List<MemberCritique> critiques(String key) =>
         (json[key] as List<dynamic>?)
-            ?.map((c) => MemberCritique.fromJson(
-                  Map<String, dynamic>.from(c as Map),
-                ))
+            ?.map(
+              (c) =>
+                  MemberCritique.fromJson(Map<String, dynamic>.from(c as Map)),
+            )
             .toList() ??
         const <MemberCritique>[];
 
@@ -152,7 +163,8 @@ class DeliberationRound {
       converged: (json['converged'] as bool?) ?? false,
       attacks: critiques('attacks'),
       critiques: critiques('critiques'),
-      revisedResponses: (json['revised_responses'] as List<dynamic>?)
+      revisedResponses:
+          (json['revised_responses'] as List<dynamic>?)
               ?.map((r) => Map<String, dynamic>.from(r as Map))
               .toList() ??
           const <Map<String, dynamic>>[],
@@ -174,11 +186,11 @@ class MemberCritique {
   });
 
   factory MemberCritique.fromJson(Map<String, dynamic> json) => MemberCritique(
-        memberId: json['member_id'] as String?,
-        memberName: (json['member_name'] as String?) ?? '',
-        critique: (json['critique'] as String?) ?? '',
-        error: json['error'] as String?,
-      );
+    memberId: json['member_id'] as String?,
+    memberName: (json['member_name'] as String?) ?? '',
+    critique: (json['critique'] as String?) ?? '',
+    error: json['error'] as String?,
+  );
 }
 
 /// Council mode opt-in. "standard" runs gather → rank → synthesise with no
@@ -240,7 +252,8 @@ class ThreadEvent {
       actorName: json['actor_name'] as String,
       content: json['content'] as String?,
       metadata: Map<String, dynamic>.from(
-          (json['metadata'] as Map<dynamic, dynamic>?) ?? {}),
+        (json['metadata'] as Map<dynamic, dynamic>?) ?? {},
+      ),
       createdAt: json['created_at'] as String,
     );
   }
@@ -413,10 +426,10 @@ class WorkspaceUser {
   });
 
   factory WorkspaceUser.fromJson(Map<String, dynamic> json) => WorkspaceUser(
-        id: json['id'] as String,
-        displayName: json['display_name'] as String,
-        lastSeenAt: json['last_seen_at'] as String?,
-      );
+    id: json['id'] as String,
+    displayName: json['display_name'] as String,
+    lastSeenAt: json['last_seen_at'] as String?,
+  );
 }
 
 /// A human collected from the @mention picker before the user submits a
@@ -501,16 +514,20 @@ class BackendInfo {
   /// "synapse" or "cerebro"
   final String backend;
   final String version;
+
   /// "jwt_hs256" | "jwt_oidc" | "local"
   final String authMode;
   final bool multiTenant;
   final bool billing;
+
   /// Real-time transport: "centrifugo" (Synapse OSS) or "phoenix" (Cerebro).
   /// SDK adapters and non-SDK clients pick the transport library on this
   /// field. See cerebro/docs/_design/realtime.md §6.
   final String realtime;
+
   /// OIDC issuer URL (present when authMode == "jwt_oidc")
   final String? oidcIssuer;
+
   /// OIDC client ID (present when authMode == "jwt_oidc")
   final String? oidcClientId;
 
@@ -592,9 +609,9 @@ class AgentConfig {
   }
 
   Map<String, dynamic> toJson() => {
-        if (model != null) 'model': model,
-        'tools': tools,
-      };
+    if (model != null) 'model': model,
+    'tools': tools,
+  };
 }
 
 class ChatSession {
@@ -628,7 +645,8 @@ class ChatSession {
         (json['agent_config'] as Map<String, dynamic>?) ?? const {},
       ),
       createdAt: json['created_at'] as String,
-      updatedAt: (json['updated_at'] as String?) ?? json['created_at'] as String,
+      updatedAt:
+          (json['updated_at'] as String?) ?? json['created_at'] as String,
     );
   }
 }
@@ -701,28 +719,24 @@ class ToolCallEvent extends ChatSseEvent {
     required this.arguments,
   });
   factory ToolCallEvent.fromJson(Map<String, dynamic> j) => ToolCallEvent(
-        id: j['id'] as String,
-        name: j['name'] as String,
-        arguments: Map<String, dynamic>.from(
-          (j['arguments'] as Map<dynamic, dynamic>?) ?? const {},
-        ),
-      );
+    id: j['id'] as String,
+    name: j['name'] as String,
+    arguments: Map<String, dynamic>.from(
+      (j['arguments'] as Map<dynamic, dynamic>?) ?? const {},
+    ),
+  );
 }
 
 class ToolResultEvent extends ChatSseEvent {
   final String toolCallId;
   final Object? result;
   final String? error;
-  const ToolResultEvent({
-    required this.toolCallId,
-    this.result,
-    this.error,
-  });
+  const ToolResultEvent({required this.toolCallId, this.result, this.error});
   factory ToolResultEvent.fromJson(Map<String, dynamic> j) => ToolResultEvent(
-        toolCallId: j['tool_call_id'] as String,
-        result: j['result'],
-        error: j['error'] as String?,
-      );
+    toolCallId: j['tool_call_id'] as String,
+    result: j['result'],
+    error: j['error'] as String?,
+  );
 }
 
 class MessageCompleteEvent extends ChatSseEvent {
