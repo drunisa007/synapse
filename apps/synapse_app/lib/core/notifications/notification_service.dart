@@ -88,6 +88,7 @@ class NotificationService {
       const InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
         iOS: DarwinInitializationSettings(),
+        macOS: DarwinInitializationSettings(),
       ),
       onDidReceiveNotificationResponse: _onNotificationTap,
     );
@@ -95,12 +96,20 @@ class NotificationService {
     if (Platform.isAndroid) {
       await _local
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
+            AndroidFlutterLocalNotificationsPlugin
+          >()
           ?.requestNotificationsPermission();
     } else if (Platform.isIOS) {
       await _local
           .resolvePlatformSpecificImplementation<
-              IOSFlutterLocalNotificationsPlugin>()
+            IOSFlutterLocalNotificationsPlugin
+          >()
+          ?.requestPermissions(alert: true, badge: true, sound: true);
+    } else if (Platform.isMacOS) {
+      await _local
+          .resolvePlatformSpecificImplementation<
+            MacOSFlutterLocalNotificationsPlugin
+          >()
           ?.requestPermissions(alert: true, badge: true, sound: true);
     }
 
@@ -142,7 +151,8 @@ class NotificationService {
 
     FirebaseMessaging.onMessage.listen((message) {
       if (!_passesTenantFilter(message.data)) return;
-      final title = message.notification?.title ?? message.data['title'] ?? 'Synapse';
+      final title =
+          message.notification?.title ?? message.data['title'] ?? 'Synapse';
       final body = message.notification?.body ?? message.data['body'] ?? '';
       // Pass council_id + tenant_id through to _showLocal so a tap on
       // the local notification we render here still deep-links AND
@@ -159,7 +169,8 @@ class NotificationService {
 
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
       if (!_passesTenantFilter(message.data)) return;
-      final title = message.notification?.title ?? message.data['title'] ?? 'Synapse';
+      final title =
+          message.notification?.title ?? message.data['title'] ?? 'Synapse';
       final body = message.notification?.body ?? message.data['body'] ?? '';
       onMessage?.call(title, body);
       _maybeOpenCouncil(_councilIdFrom(message.data));
@@ -297,11 +308,15 @@ class NotificationService {
   }
 
   /// Background isolate entry — shows a notification without the app instance.
-  static Future<void> showBackgroundNotification(String title, String body) async {
+  static Future<void> showBackgroundNotification(
+    String title,
+    String body,
+  ) async {
     await _backgroundLocal.initialize(
       const InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
         iOS: DarwinInitializationSettings(),
+        macOS: DarwinInitializationSettings(),
       ),
     );
     const details = NotificationDetails(
@@ -313,6 +328,7 @@ class NotificationService {
         priority: Priority.high,
       ),
       iOS: DarwinNotificationDetails(),
+      macOS: DarwinNotificationDetails(),
     );
     await _backgroundLocal.show(
       DateTime.now().millisecondsSinceEpoch.remainder(1 << 31),
@@ -363,9 +379,10 @@ class NotificationService {
             await Future.delayed(const Duration(seconds: 5));
             continue;
           }
-          await for (final line in response.stream
-              .transform(const Utf8Decoder())
-              .transform(const LineSplitter())) {
+          await for (final line
+              in response.stream
+                  .transform(const Utf8Decoder())
+                  .transform(const LineSplitter())) {
             if (line.trim().isEmpty) continue;
             try {
               final event = jsonDecode(line) as Map<String, dynamic>;
@@ -415,6 +432,7 @@ class NotificationService {
         priority: Priority.high,
       ),
       iOS: DarwinNotificationDetails(),
+      macOS: DarwinNotificationDetails(),
     );
     await _local.show(
       DateTime.now().millisecondsSinceEpoch.remainder(1 << 31),

@@ -9,7 +9,8 @@ import 'notification_service.dart';
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  final title = message.notification?.title ?? message.data['title'] ?? 'Synapse';
+  final title =
+      message.notification?.title ?? message.data['title'] ?? 'Synapse';
   final body = message.notification?.body ?? message.data['body'] ?? '';
   if (title.isNotEmpty || body.isNotEmpty) {
     await NotificationService.showBackgroundNotification(title, body);
