@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../core/api/client.dart';
 import '../../core/api/models.dart';
+import '../../ui/synapse_components.dart';
+import '../../ui/synapse_shell.dart';
+import '../../ui/synapse_tokens.dart';
 
 class CreateCouncilScreen extends StatefulWidget {
   final SynapseApiClient client;
@@ -31,22 +35,23 @@ class _CreateCouncilScreenState extends State<CreateCouncilScreen> {
   Future<void> _loadTemplates() async {
     try {
       final templates = await widget.client.listTemplates();
-      if (mounted) {
-        setState(() {
-          _templates = templates;
-          _loadingTemplates = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _templates = templates;
+        _loadingTemplates = false;
+      });
     } catch (_) {
-      if (mounted) {
-        setState(() => _loadingTemplates = false);
-      }
+      if (!mounted) return;
+      setState(() => _loadingTemplates = false);
     }
   }
 
   Future<void> _submit() async {
     final question = _questionController.text.trim();
-    if (question.isEmpty) return;
+    if (question.isEmpty) {
+      setState(() => _error = 'Question is required.');
+      return;
+    }
 
     setState(() {
       _loading = true;
@@ -60,23 +65,23 @@ class _CreateCouncilScreenState extends State<CreateCouncilScreen> {
         councilType: _councilType,
         mode: _mode,
       );
-      if (mounted) {
-        context.go('/councils/${response.sessionId}/chat');
-      }
+      if (!mounted) return;
+      context.go(
+        '/councils/${response.sessionId}/chat',
+        extra: {'threadId': response.threadId, 'status': response.status},
+      );
     } on ApiException catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.message;
-          _loading = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _error = e.message;
+        _loading = false;
+      });
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.toString();
-          _loading = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
     }
   }
 
@@ -88,129 +93,298 @@ class _CreateCouncilScreenState extends State<CreateCouncilScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('New Council')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
+    return SynapseWorkspaceFrame(
+      selected: SynapseNavItem.councils,
+      title: 'New council',
+      onBack: () => context.go('/councils'),
+      actions: [
+        FilledButton.icon(
+          onPressed: _loading ? null : _submit,
+          icon: _loading
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.play_arrow_rounded, size: 18),
+          label: const Text('Start'),
+        ),
+      ],
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final stacked = constraints.maxWidth < 880;
+          final form = _FormPanel(
+            questionController: _questionController,
+            templates: _templates,
+            selectedTemplate: _selectedTemplate,
+            loadingTemplates: _loadingTemplates,
+            councilType: _councilType,
+            mode: _mode,
+            error: _error,
+            onTemplateChanged: (value) =>
+                setState(() => _selectedTemplate = value),
+            onCouncilTypeChanged: (value) =>
+                setState(() => _councilType = value),
+            onModeChanged: (value) => setState(() => _mode = value),
+            onSubmit: _submit,
+            loading: _loading,
+          );
+          final summary = _SummaryPanel(
+            template: _selectedTemplate,
+            councilType: _councilType,
+            mode: _mode,
+          );
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(SynSpacing.xl),
+            child: stacked
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      form,
+                      const SizedBox(height: SynSpacing.lg),
+                      summary,
+                    ],
+                  )
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 3, child: form),
+                      const SizedBox(width: SynSpacing.lg),
+                      Expanded(flex: 2, child: summary),
+                    ],
+                  ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _FormPanel extends StatelessWidget {
+  final TextEditingController questionController;
+  final List<Template> templates;
+  final Template? selectedTemplate;
+  final bool loadingTemplates;
+  final String councilType;
+  final CouncilMode mode;
+  final String? error;
+  final ValueChanged<Template?> onTemplateChanged;
+  final ValueChanged<String> onCouncilTypeChanged;
+  final ValueChanged<CouncilMode> onModeChanged;
+  final VoidCallback onSubmit;
+  final bool loading;
+
+  const _FormPanel({
+    required this.questionController,
+    required this.templates,
+    required this.selectedTemplate,
+    required this.loadingTemplates,
+    required this.councilType,
+    required this.mode,
+    required this.error,
+    required this.onTemplateChanged,
+    required this.onCouncilTypeChanged,
+    required this.onModeChanged,
+    required this.onSubmit,
+    required this.loading,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SynSurface(
+      color: SynColors.surface,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Question', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: SynSpacing.md),
+          TextField(
+            controller: questionController,
+            autofocus: true,
+            maxLines: 7,
+            minLines: 5,
+            textInputAction: TextInputAction.newline,
+            decoration: const InputDecoration(
+              hintText: 'What decision should the council deliberate on?',
+              alignLabelWithHint: true,
+            ),
+          ),
+          const SizedBox(height: SynSpacing.lg),
+          if (loadingTemplates)
+            const SizedBox(
+              height: 42,
+              child: Center(
+                child: SizedBox(
+                  height: 18,
+                  width: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else
+            DropdownButtonFormField<Template?>(
+              initialValue: selectedTemplate,
+              decoration: const InputDecoration(
+                labelText: 'Template',
+                prefixIcon: Icon(Icons.library_books_outlined),
+              ),
+              items: [
+                const DropdownMenuItem<Template?>(
+                  value: null,
+                  child: Text('None'),
+                ),
+                ...templates.map(
+                  (template) => DropdownMenuItem<Template?>(
+                    value: template,
+                    child: Text(template.name),
+                  ),
+                ),
+              ],
+              onChanged: onTemplateChanged,
+            ),
+          const SizedBox(height: SynSpacing.lg),
+          const _SectionLabel(label: 'Council type'),
+          const SizedBox(height: SynSpacing.sm),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(
+                value: 'llm',
+                icon: Icon(Icons.auto_awesome, size: 16),
+                label: Text('LLM'),
+              ),
+              ButtonSegment(
+                value: 'async',
+                icon: Icon(Icons.groups_2_outlined, size: 16),
+                label: Text('Async'),
+              ),
+            ],
+            selected: {councilType},
+            onSelectionChanged: (selection) =>
+                onCouncilTypeChanged(selection.first),
+          ),
+          const SizedBox(height: SynSpacing.lg),
+          const _SectionLabel(label: 'Mode'),
+          const SizedBox(height: SynSpacing.sm),
+          SegmentedButton<CouncilMode>(
+            segments: const [
+              ButtonSegment(
+                value: CouncilMode.standard,
+                icon: Icon(Icons.route_outlined, size: 16),
+                label: Text('Standard'),
+              ),
+              ButtonSegment(
+                value: CouncilMode.redTeam,
+                icon: Icon(Icons.gpp_maybe_outlined, size: 16),
+                label: Text('Red team'),
+              ),
+              ButtonSegment(
+                value: CouncilMode.deliberation,
+                icon: Icon(Icons.sync_alt_outlined, size: 16),
+                label: Text('Deliberation'),
+              ),
+            ],
+            selected: {mode},
+            onSelectionChanged: (selection) => onModeChanged(selection.first),
+          ),
+          if (error != null) ...[
+            const SizedBox(height: SynSpacing.lg),
+            SynNotice(
+              icon: Icons.error_outline,
+              title: 'Create failed',
+              message: error!,
+              color: SynColors.red,
+            ),
+          ],
+          const SizedBox(height: SynSpacing.xl),
+          FilledButton.icon(
+            onPressed: loading ? null : onSubmit,
+            icon: loading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.play_arrow_rounded, size: 18),
+            label: const Text('Start council'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryPanel extends StatelessWidget {
+  final Template? template;
+  final String councilType;
+  final CouncilMode mode;
+
+  const _SummaryPanel({
+    required this.template,
+    required this.councilType,
+    required this.mode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SynSurface(
+          color: SynColors.surfaceMuted,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextField(
-                controller: _questionController,
-                autofocus: true,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Question',
-                  hintText: 'What should the council deliberate on?',
-                  border: OutlineInputBorder(),
-                  alignLabelWithHint: true,
-                ),
+              Text(
+                'Run profile',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
-              const SizedBox(height: 16),
-              if (_loadingTemplates)
-                const Center(
-                    child:
-                        SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2)))
-              else if (_templates.isNotEmpty)
-                DropdownButtonFormField<Template?>(
-                  initialValue: _selectedTemplate,
-                  decoration: const InputDecoration(
-                    labelText: 'Template (optional)',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: [
-                    const DropdownMenuItem<Template?>(
-                      value: null,
-                      child: Text('None'),
-                    ),
-                    ..._templates.map(
-                      (t) => DropdownMenuItem<Template?>(
-                        value: t,
-                        child: Text('${t.name} (${t.councilType})'),
-                      ),
-                    ),
-                  ],
-                  onChanged: (t) => setState(() => _selectedTemplate = t),
-                ),
-              const SizedBox(height: 16),
-              const Text('Council Type',
-                  style: TextStyle(fontSize: 13, color: Colors.white70)),
-              const SizedBox(height: 8),
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'llm', label: Text('LLM')),
-                  ButtonSegment(value: 'async', label: Text('Async')),
-                ],
-                selected: {_councilType},
-                onSelectionChanged: (s) =>
-                    setState(() => _councilType = s.first),
+              const SizedBox(height: SynSpacing.lg),
+              SynMetaRow(
+                label: 'Type',
+                value: councilType == 'llm' ? 'LLM council' : 'Async council',
               ),
-              const SizedBox(height: 16),
-              const Text('Mode',
-                  style: TextStyle(fontSize: 13, color: Colors.white70)),
-              const SizedBox(height: 8),
-              SegmentedButton<CouncilMode>(
-                segments: const [
-                  ButtonSegment(
-                    value: CouncilMode.standard,
-                    label: Text('Standard'),
-                  ),
-                  ButtonSegment(
-                    value: CouncilMode.redTeam,
-                    label: Text('Red team'),
-                  ),
-                  ButtonSegment(
-                    value: CouncilMode.deliberation,
-                    label: Text('Deliberation'),
-                  ),
-                ],
-                selected: {_mode},
-                onSelectionChanged: (s) =>
-                    setState(() => _mode = s.first),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  switch (_mode) {
-                    CouncilMode.standard =>
-                      'Gather → Rank → Synthesise.',
-                    CouncilMode.redTeam =>
-                      'One adversarial round attacking each member’s Stage 1 proposal.',
-                    CouncilMode.deliberation =>
-                      'Critique + revise loop, up to 3 rounds, breaks early on convergence.',
-                  },
-                  style: const TextStyle(fontSize: 11, color: Colors.white54),
+              const SizedBox(height: SynSpacing.sm),
+              SynMetaRow(label: 'Mode', value: mode.label),
+              const SizedBox(height: SynSpacing.sm),
+              SynMetaRow(label: 'Template', value: template?.name ?? 'None'),
+              if (template != null) ...[
+                const SizedBox(height: SynSpacing.lg),
+                Text(
+                  template!.description,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: SynColors.textMuted),
                 ),
-              ),
-              const SizedBox(height: 24),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(
-                    _error!,
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                ),
-              ElevatedButton(
-                onPressed: _loading ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6366F1),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                child: _loading
-                    ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Create Council'),
-              ),
+              ],
             ],
           ),
         ),
-      ),
+        const SizedBox(height: SynSpacing.lg),
+        const SynNotice(
+          icon: Icons.key_outlined,
+          title: 'LLM credentials required',
+          message:
+              'If the backend has no provider key, councils will be created but fail during execution.',
+          color: SynColors.amber,
+        ),
+      ],
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String label;
+
+  const _SectionLabel({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: Theme.of(
+        context,
+      ).textTheme.labelMedium?.copyWith(color: SynColors.textMuted),
     );
   }
 }

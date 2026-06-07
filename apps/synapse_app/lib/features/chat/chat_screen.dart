@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/api/client.dart';
 import '../../core/api/models.dart';
 import '../../core/realtime/realtime_client.dart';
+import '../../ui/synapse_components.dart';
+import '../../ui/synapse_tokens.dart';
 import '../../widgets/live_status_banner.dart';
 import '../../widgets/thread_entry.dart';
 import '../../widgets/directive_input.dart';
@@ -119,15 +121,17 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       } on ApiException catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(e.message)),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(e.message)));
         }
       }
     } else if (_status == 'closed') {
       try {
-        final response =
-            await widget.client.chatWithVerdict(widget.sessionId, text);
+        final response = await widget.client.chatWithVerdict(
+          widget.sessionId,
+          text,
+        );
         final fakeEvent = ThreadEvent(
           id: DateTime.now().millisecondsSinceEpoch,
           threadId: widget.threadId,
@@ -157,9 +161,9 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       } on ApiException catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(e.message)),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(e.message)));
         }
       }
     }
@@ -171,9 +175,9 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) setState(() => _status = 'closed');
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     }
   }
@@ -183,9 +187,9 @@ class _ChatScreenState extends State<ChatScreen> {
       await widget.client.approveCouncil(widget.sessionId);
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     }
   }
@@ -207,39 +211,58 @@ class _ChatScreenState extends State<ChatScreen> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_error != null) {
-      return Center(
-        child: Text(_error!, style: const TextStyle(color: Colors.red)),
-      );
+      return SynErrorState(message: _error!);
     }
 
     return Column(
       children: [
         LiveStatusBanner(client: widget.client, councilId: widget.sessionId),
-        Expanded(
-          child: ListView.builder(
-            controller: _scrollController,
-            itemCount: _events.length + (_status == 'closed' ? 1 : 0),
-            itemBuilder: (context, index) {
-              if (_status == 'closed' && index == _events.length) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Row(
-                    children: [
-                      Expanded(child: Divider()),
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8),
-                        child: Text('Council concluded',
-                            style: TextStyle(
-                                color: Colors.white38, fontSize: 11)),
-                      ),
-                      Expanded(child: Divider()),
-                    ],
-                  ),
-                );
-              }
-              return ThreadEntry(event: _events[index]);
-            },
+        if (_isReadOnly && _status != 'closed')
+          SynNotice(
+            icon: Icons.lock_outline,
+            title: 'Thread is read-only',
+            message:
+                'This council is currently ${_status.replaceAll('_', ' ')}.',
+            color: SynColors.cyan,
           ),
+        Expanded(
+          child: _events.isEmpty
+              ? const SynEmptyState(
+                  icon: Icons.forum_outlined,
+                  title: 'No thread events yet',
+                  message: 'Events will appear when the council starts.',
+                )
+              : ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(SynSpacing.md),
+                  itemCount: _events.length + (_status == 'closed' ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (_status == 'closed' && index == _events.length) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: SynSpacing.md),
+                        child: Row(
+                          children: [
+                            Expanded(child: Divider()),
+                            Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: SynSpacing.sm,
+                              ),
+                              child: Text(
+                                'Council concluded',
+                                style: TextStyle(
+                                  color: SynColors.textFaint,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                            Expanded(child: Divider()),
+                          ],
+                        ),
+                      );
+                    }
+                    return ThreadEntry(event: _events[index]);
+                  },
+                ),
         ),
         DirectiveInput(
           onSend: _handleSend,

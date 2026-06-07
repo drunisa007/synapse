@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../ui/synapse_tokens.dart';
+
 typedef DirectiveCallback = void Function();
 
 class DirectiveInput extends StatefulWidget {
@@ -36,8 +38,7 @@ class _DirectiveInputState extends State<DirectiveInput> {
   ];
 
   void _handleChanged(String value) {
-    final showMenu = value.contains('@') &&
-        !value.trimRight().contains(' ');
+    final showMenu = value.contains('@') && !value.trimRight().contains(' ');
     if (showMenu != _showDirectives) {
       setState(() => _showDirectives = showMenu);
     }
@@ -62,7 +63,10 @@ class _DirectiveInputState extends State<DirectiveInput> {
       widget.onApprove?.call();
     } else if (text.startsWith('@')) {
       final parts = text.split(' ');
-      widget.onDirective?.call(parts[0], parts.length > 1 ? parts.sublist(1).join(' ') : null);
+      widget.onDirective?.call(
+        parts[0],
+        parts.length > 1 ? parts.sublist(1).join(' ') : null,
+      );
     } else {
       widget.onSend(text);
     }
@@ -89,11 +93,11 @@ class _DirectiveInputState extends State<DirectiveInput> {
       children: [
         if (_showDirectives)
           Container(
-            margin: const EdgeInsets.symmetric(horizontal: 8),
+            margin: const EdgeInsets.symmetric(horizontal: SynSpacing.md),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E1E2E),
-              border: Border.all(color: Colors.white12),
-              borderRadius: BorderRadius.circular(8),
+              color: SynColors.surfaceRaised,
+              border: Border.all(color: SynColors.borderStrong),
+              borderRadius: BorderRadius.circular(SynRadii.lg),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -103,22 +107,24 @@ class _DirectiveInputState extends State<DirectiveInput> {
                       onTap: () => _selectDirective(d),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
+                          horizontal: SynSpacing.md,
+                          vertical: SynSpacing.sm,
+                        ),
                         child: Row(
                           children: [
                             Text(
                               d.command,
                               style: const TextStyle(
-                                color: Color(0xFF6366F1),
+                                color: SynColors.primary,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 13,
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: SynSpacing.sm),
                             Text(
                               d.description,
                               style: const TextStyle(
-                                color: Colors.white54,
+                                color: SynColors.textMuted,
                                 fontSize: 12,
                               ),
                             ),
@@ -131,7 +137,7 @@ class _DirectiveInputState extends State<DirectiveInput> {
             ),
           ),
         Padding(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(SynSpacing.md),
           child: Row(
             children: [
               Expanded(
@@ -141,20 +147,17 @@ class _DirectiveInputState extends State<DirectiveInput> {
                   onChanged: _handleChanged,
                   onSubmitted: (_) => _handleSend(),
                   decoration: const InputDecoration(
-                    hintText: 'Type a message or @ for directives…',
-                    border: OutlineInputBorder(),
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    isDense: true,
+                    hintText: 'Type a message or @ for directives...',
+                    prefixIcon: Icon(Icons.chat_bubble_outline),
                   ),
                   maxLines: null,
                   textInputAction: TextInputAction.send,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: SynSpacing.sm),
               IconButton(
                 icon: const Icon(Icons.send),
-                color: const Color(0xFF6366F1),
+                color: SynColors.primary,
                 onPressed: _handleSend,
                 tooltip: 'Send',
               ),

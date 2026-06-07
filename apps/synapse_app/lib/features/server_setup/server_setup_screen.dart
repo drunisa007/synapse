@@ -46,8 +46,7 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
     super.dispose();
   }
 
-  String _normalise(String raw) =>
-      raw.trim().replaceAll(RegExp(r'/+$'), '');
+  String _normalise(String raw) => raw.trim().replaceAll(RegExp(r'/+$'), '');
 
   Future<void> _connect() async {
     final url = _normalise(_controller.text);
@@ -65,7 +64,8 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
 
       if (response.statusCode != 200) {
         setState(() {
-          _error = 'Server returned ${response.statusCode}. '
+          _error =
+              'Server returned ${response.statusCode}. '
               'Is this a Synapse or Cerebro backend?';
           _checking = false;
         });
@@ -76,8 +76,7 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
 
       // Cerebro wraps /v1/info in {"data": {...}}; Synapse returns bare JSON.
       final isCerebro = raw['data'] is Map<String, dynamic>;
-      final body =
-          isCerebro ? raw['data'] as Map<String, dynamic> : raw;
+      final body = isCerebro ? raw['data'] as Map<String, dynamic> : raw;
 
       final oidc = body['oidc'] as Map<String, dynamic>?;
 
@@ -96,7 +95,8 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
       });
     } on FormatException {
       setState(() {
-        _error = 'Could not parse server response. '
+        _error =
+            'Could not parse server response. '
             'Check the URL and try again.';
         _checking = false;
       });
@@ -169,7 +169,10 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                   const SizedBox(height: 12),
                   Text(
                     _error!,
-                    style: const TextStyle(color: Colors.redAccent, fontSize: 13),
+                    style: const TextStyle(
+                      color: Colors.redAccent,
+                      fontSize: 13,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -203,8 +206,10 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                   const SizedBox(height: 8),
                   TextButton(
                     onPressed: () => setState(() => _preview = null),
-                    child: const Text('Change URL',
-                        style: TextStyle(color: Colors.white54)),
+                    child: const Text(
+                      'Change URL',
+                      style: TextStyle(color: Colors.white54),
+                    ),
                   ),
                 ],
               ],
@@ -250,27 +255,33 @@ class _BackendPreviewCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF1E1E2E),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.4)),
+        border: Border.all(
+          color: const Color(0xFF6366F1).withValues(alpha: 0.4),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.check_circle,
-                  color: Color(0xFF4ADE80), size: 18),
+              const Icon(
+                Icons.check_circle,
+                color: Color(0xFF4ADE80),
+                size: 18,
+              ),
               const SizedBox(width: 8),
               Text(
                 preview.name,
                 style: const TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: 15),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
               ),
               if (preview.version.isNotEmpty) ...[
                 const SizedBox(width: 8),
                 Text(
                   preview.version,
-                  style: const TextStyle(
-                      color: Colors.white38, fontSize: 12),
+                  style: const TextStyle(color: Colors.white38, fontSize: 12),
                 ),
               ],
             ],
@@ -288,8 +299,7 @@ class _BackendPreviewCard extends StatelessWidget {
                 SizedBox(width: 4),
                 Text(
                   'Multi-tenant',
-                  style: TextStyle(
-                      color: Color(0xFF6366F1), fontSize: 12),
+                  style: TextStyle(color: Color(0xFF6366F1), fontSize: 12),
                 ),
               ],
             ),

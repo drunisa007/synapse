@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/api/client.dart';
 import '../../core/api/models.dart';
+import '../../ui/synapse_components.dart';
+import '../../ui/synapse_tokens.dart';
 import '../../widgets/mention_picker.dart';
 
 /// Mode 4 detail screen — free-standing chat session with SSE streaming.
@@ -292,8 +294,7 @@ class _ChatSessionDetailScreenState extends State<ChatSessionDetailScreen> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () =>
-                Navigator.of(ctx).pop(controller.text.trim()),
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
             child: const Text('Save & resend'),
           ),
         ],
@@ -302,8 +303,11 @@ class _ChatSessionDetailScreenState extends State<ChatSessionDetailScreen> {
     if (newContent == null || newContent.isEmpty) return;
     await _runTurn(
       userBubble: newContent,
-      stream: widget.client
-          .editChatMessage(widget.sessionId, original.id, newContent),
+      stream: widget.client.editChatMessage(
+        widget.sessionId,
+        original.id,
+        newContent,
+      ),
     );
   }
 
@@ -311,15 +315,19 @@ class _ChatSessionDetailScreenState extends State<ChatSessionDetailScreen> {
     await _runTurn(
       // No new user bubble — we're re-running the existing user message.
       userBubble: null,
-      stream: widget.client
-          .regenerateChatMessage(widget.sessionId, reflection.id),
+      stream: widget.client.regenerateChatMessage(
+        widget.sessionId,
+        reflection.id,
+      ),
     );
   }
 
   Future<void> _fork(ThreadEvent at) async {
     try {
-      final child =
-          await widget.client.forkChatSession(widget.sessionId, at.id);
+      final child = await widget.client.forkChatSession(
+        widget.sessionId,
+        at.id,
+      );
       if (!mounted) return;
       context.go('/chat/sessions/${child.id}');
     } on ApiException catch (e) {
@@ -341,8 +349,9 @@ class _ChatSessionDetailScreenState extends State<ChatSessionDetailScreen> {
       case ToolCallEvent e:
         // Tool calls render *before* the streaming assistant message —
         // the assistant's text typically continues after the tool result.
-        final assistantIdx =
-            _live.indexWhere((m) => m is _AssistantMsg && m.streaming);
+        final assistantIdx = _live.indexWhere(
+          (m) => m is _AssistantMsg && m.streaming,
+        );
         final tool = _ToolMsg(id: e.id, name: e.name, args: e.arguments);
         if (assistantIdx == -1) {
           _live.add(tool);
@@ -382,100 +391,113 @@ class _ChatSessionDetailScreenState extends State<ChatSessionDetailScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return Scaffold(
-        appBar: AppBar(
-          leading: BackButton(onPressed: () => context.go('/chat/sessions')),
-        ),
-        body: const Center(child: CircularProgressIndicator()),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
     if (_loadError != null) {
-      return Scaffold(
-        appBar: AppBar(
-          leading: BackButton(onPressed: () => context.go('/chat/sessions')),
-        ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(_loadError!, style: const TextStyle(color: Colors.red)),
-          ),
-        ),
+      return SynErrorState(
+        title: 'Could not load chat',
+        message: _loadError!,
+        onRetry: _load,
       );
     }
     final s = _session!;
-    return Scaffold(
-      appBar: AppBar(
-        leading: BackButton(onPressed: () => context.go('/chat/sessions')),
-        title: Text(s.title.isEmpty ? '(untitled)' : s.title),
-        actions: [
-          if (s.isArchived) const Chip(label: Text('archived')),
-          Padding(
-            padding: const EdgeInsets.only(right: 12, left: 6),
-            child: Center(
-              child: Text(
-                s.agentConfig.model ?? 'default model',
-                style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 11,
+    return Material(
+      color: Colors.transparent,
+      child: Column(
+        children: [
+          SynSurface(
+            margin: const EdgeInsets.fromLTRB(
+              SynSpacing.xl,
+              SynSpacing.lg,
+              SynSpacing.xl,
+              SynSpacing.sm,
+            ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: SynSpacing.lg,
+              vertical: SynSpacing.md,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    s.title.isEmpty ? 'Untitled chat' : s.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
                 ),
-              ),
+                const SizedBox(width: SynSpacing.md),
+                if (s.isArchived) const Chip(label: Text('archived')),
+                const SizedBox(width: SynSpacing.sm),
+                Text(
+                  s.agentConfig.model ?? 'default model',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: SynColors.textMuted,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
-      body: Column(
-        children: [
           Expanded(
             child: ListView(
               controller: _scroll,
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.fromLTRB(
+                SynSpacing.xl,
+                SynSpacing.sm,
+                SynSpacing.xl,
+                SynSpacing.lg,
+              ),
               children: [
                 ..._history.map(_renderHistoryEvent),
                 ..._live.map(_renderLive),
                 if (_streamError != null)
-                  Container(
-                    margin: const EdgeInsets.only(top: 8),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      _streamError!,
-                      style: const TextStyle(color: Colors.red),
-                    ),
+                  SynNotice(
+                    icon: Icons.error_outline,
+                    title: 'Stream failed',
+                    message: _streamError!,
+                    color: SynColors.red,
                   ),
               ],
             ),
           ),
           SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (_showMentionPicker)
-                  MentionPicker(
-                    query: _mentionQuery,
-                    users: _mentionUsers,
-                    loading: _mentionLoading,
-                    onSelect: _handleMentionSelect,
-                  ),
-                if (_pendingHumans.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
-                    child: Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: _pendingHumans
-                          .map((h) => _PendingHumanChip(
+            child: SynSurface(
+              margin: const EdgeInsets.fromLTRB(
+                SynSpacing.xl,
+                0,
+                SynSpacing.xl,
+                SynSpacing.lg,
+              ),
+              padding: const EdgeInsets.all(SynSpacing.md),
+              color: SynColors.chrome,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_showMentionPicker)
+                    MentionPicker(
+                      query: _mentionQuery,
+                      users: _mentionUsers,
+                      loading: _mentionLoading,
+                      onSelect: _handleMentionSelect,
+                    ),
+                  if (_pendingHumans.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: SynSpacing.sm),
+                      child: Wrap(
+                        spacing: SynSpacing.sm,
+                        runSpacing: SynSpacing.xs,
+                        children: _pendingHumans
+                            .map(
+                              (h) => _PendingHumanChip(
                                 human: h,
                                 onRemove: () => _removePendingHuman(h),
-                              ))
-                          .toList(growable: false),
+                              ),
+                            )
+                            .toList(growable: false),
+                      ),
                     ),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Row(
+                  Row(
                     children: [
                       Expanded(
                         child: TextField(
@@ -484,27 +506,22 @@ class _ChatSessionDetailScreenState extends State<ChatSessionDetailScreen> {
                           decoration: InputDecoration(
                             hintText: s.isArchived
                                 ? 'This chat is archived'
-                                : 'Type a message…',
-                            border: const OutlineInputBorder(),
+                                : 'Type a message...',
                           ),
                           onSubmitted: (_) => _send(),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      IconButton.filled(
+                      const SizedBox(width: SynSpacing.sm),
+                      SynIconButton(
+                        icon: _sending ? Icons.more_horiz : Icons.send,
+                        tooltip: 'Send',
                         onPressed: (s.isArchived || _sending) ? null : _send,
-                        icon: _sending
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.send),
+                        selected: true,
                       ),
                     ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -513,25 +530,20 @@ class _ChatSessionDetailScreenState extends State<ChatSessionDetailScreen> {
   }
 
   Widget _renderHistoryEvent(ThreadEvent e) {
-    final isTool =
-        e.eventType == 'tool_call' || e.eventType == 'tool_result';
+    final isTool = e.eventType == 'tool_call' || e.eventType == 'tool_result';
     final isUser = e.eventType == 'user_message';
     final isReflection = e.eventType == 'reflection';
     final canEdit = isUser && _session?.isArchived != true && !_sending;
-    final canRegen =
-        isReflection && _session?.isArchived != true && !_sending;
+    final canRegen = isReflection && _session?.isArchived != true && !_sending;
     final canFork = !_sending;
-    return Container(
+    return SynSurface(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isUser
-            ? Colors.indigo.withValues(alpha: 0.10)
-            : isTool
-                ? Colors.amber.withValues(alpha: 0.08)
-                : Colors.grey.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(8),
-      ),
+      color: isUser
+          ? SynColors.primary.withValues(alpha: 0.10)
+          : isTool
+          ? SynColors.amber.withValues(alpha: 0.08)
+          : SynColors.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -540,7 +552,9 @@ class _ChatSessionDetailScreenState extends State<ChatSessionDetailScreen> {
               Expanded(
                 child: Text(
                   e.eventType.toUpperCase(),
-                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelSmall?.copyWith(color: SynColors.textFaint),
                 ),
               ),
               if (canEdit)
@@ -625,13 +639,10 @@ class _ChatSessionDetailScreenState extends State<ChatSessionDetailScreen> {
     bool mono = false,
     bool streaming = false,
   }) {
-    return Container(
+    return SynSurface(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: (tint ?? Colors.grey).withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(8),
-      ),
+      color: (tint ?? SynColors.surfaceRaised).withValues(alpha: 0.10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -639,7 +650,9 @@ class _ChatSessionDetailScreenState extends State<ChatSessionDetailScreen> {
             children: [
               Text(
                 label,
-                style: const TextStyle(fontSize: 10, color: Colors.grey),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelSmall?.copyWith(color: SynColors.textFaint),
               ),
               if (streaming) ...[
                 const SizedBox(width: 6),
@@ -685,7 +698,9 @@ class _PendingHumanChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         color: const Color(0xFF6366F1).withValues(alpha: 0.15),
-        border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.30)),
+        border: Border.all(
+          color: const Color(0xFF6366F1).withValues(alpha: 0.30),
+        ),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -703,10 +718,7 @@ class _PendingHumanChip extends StatelessWidget {
             SizedBox(width: 4),
             Text(
               'invite',
-              style: TextStyle(
-                color: Color(0xFFA5B4FC),
-                fontSize: 10,
-              ),
+              style: TextStyle(color: Color(0xFFA5B4FC), fontSize: 10),
             ),
           ],
           const SizedBox(width: 4),
@@ -715,11 +727,7 @@ class _PendingHumanChip extends StatelessWidget {
             customBorder: const CircleBorder(),
             child: const Padding(
               padding: EdgeInsets.all(2),
-              child: Icon(
-                Icons.close,
-                size: 12,
-                color: Color(0xFFA5B4FC),
-              ),
+              child: Icon(Icons.close, size: 12, color: Color(0xFFA5B4FC)),
             ),
           ),
         ],

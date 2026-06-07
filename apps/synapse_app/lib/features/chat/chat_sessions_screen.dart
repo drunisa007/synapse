@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/api/client.dart';
 import '../../core/api/models.dart';
+import '../../ui/synapse_components.dart';
+import '../../ui/synapse_tokens.dart';
 
 /// Mode 4 list screen — free-standing chat sessions ("Assistant").
 ///
@@ -122,37 +124,68 @@ class _ChatSessionsScreenState extends State<ChatSessionsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Assistant'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            tooltip: 'New chat',
-            onPressed: _creating ? null : _startNew,
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            SynSpacing.xl,
+            SynSpacing.lg,
+            SynSpacing.xl,
+            SynSpacing.md,
           ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'active', label: Text('Active')),
-                ButtonSegment(value: 'archived', label: Text('Archived')),
-                ButtonSegment(value: 'all', label: Text('All')),
-              ],
-              selected: {_statusFilter},
-              onSelectionChanged: (sel) {
-                setState(() => _statusFilter = sel.first);
-                _load();
-              },
-            ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 860;
+              final filter = SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'active', label: Text('Active')),
+                  ButtonSegment(value: 'archived', label: Text('Archived')),
+                  ButtonSegment(value: 'all', label: Text('All')),
+                ],
+                selected: {_statusFilter},
+                onSelectionChanged: (sel) {
+                  setState(() => _statusFilter = sel.first);
+                  _load();
+                },
+              );
+              final actions = Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _loading ? null : _load,
+                    icon: const Icon(Icons.refresh, size: 16),
+                    label: const Text('Refresh'),
+                  ),
+                  const SizedBox(width: SynSpacing.sm),
+                  FilledButton.icon(
+                    onPressed: _creating ? null : _startNew,
+                    icon: _creating
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.add, size: 16),
+                    label: const Text('New chat'),
+                  ),
+                ],
+              );
+              if (compact) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    filter,
+                    const SizedBox(height: SynSpacing.sm),
+                    actions,
+                  ],
+                );
+              }
+              return Row(children: [filter, const Spacer(), actions]);
+            },
           ),
-          Expanded(child: _body()),
-        ],
-      ),
+        ),
+        Expanded(child: _body()),
+      ],
     );
   }
 
@@ -161,49 +194,99 @@ class _ChatSessionsScreenState extends State<ChatSessionsScreen> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(_error!, style: const TextStyle(color: Colors.red)),
-        ),
+      return SynErrorState(
+        title: 'Could not load chats',
+        message: _error!,
+        onRetry: _load,
       );
     }
     if (_sessions.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('No chats yet.'),
-            const SizedBox(height: 12),
-            FilledButton.tonal(
-              onPressed: _creating ? null : _startNew,
-              child: const Text('Start your first chat'),
-            ),
-          ],
+      return SynEmptyState(
+        icon: Icons.forum_outlined,
+        title: _statusFilter == 'archived'
+            ? 'No archived chats'
+            : 'No chats yet.',
+        message: _statusFilter == 'archived'
+            ? 'Archived assistant threads will appear here.'
+            : 'Start a thread when you want a tool-using assistant outside a council.',
+        action: FilledButton(
+          onPressed: _creating ? null : _startNew,
+          child: const Text('Start your first chat'),
         ),
       );
     }
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView.builder(
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(
+          SynSpacing.xl,
+          SynSpacing.sm,
+          SynSpacing.xl,
+          SynSpacing.xl,
+        ),
         itemCount: _sessions.length,
+        separatorBuilder: (_, __) => const SizedBox(height: SynSpacing.sm),
         itemBuilder: (ctx, i) {
           final s = _sessions[i];
-          return ListTile(
-            title: Text(
-              s.title.isEmpty ? '(untitled)' : s.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+          return SynSurface(
+            padding: const EdgeInsets.symmetric(
+              horizontal: SynSpacing.lg,
+              vertical: SynSpacing.md,
             ),
-            subtitle: Text(_relative(s.updatedAt)),
-            trailing: s.isArchived
-                ? const Chip(label: Text('archived'))
-                : IconButton(
-                    icon: const Icon(Icons.archive_outlined),
+            onTap: () => context.push('/chat/sessions/${s.id}'),
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: SynColors.primary.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(SynRadii.md),
+                    border: Border.all(
+                      color: SynColors.primary.withValues(alpha: 0.28),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.forum_outlined,
+                    size: 18,
+                    color: SynColors.primary,
+                  ),
+                ),
+                const SizedBox(width: SynSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        s.title.isEmpty ? 'Untitled chat' : s.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: SynSpacing.xs),
+                      Text(
+                        'Updated ${_relative(s.updatedAt)}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: SynColors.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: SynSpacing.md),
+                if (s.isArchived)
+                  const Chip(
+                    label: Text('archived'),
+                    visualDensity: VisualDensity.compact,
+                  )
+                else
+                  SynIconButton(
+                    icon: Icons.archive_outlined,
                     tooltip: 'Archive',
                     onPressed: () => _archive(s),
                   ),
-            onTap: () => context.push('/chat/sessions/${s.id}'),
+              ],
+            ),
           );
         },
       ),

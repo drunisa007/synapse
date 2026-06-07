@@ -38,23 +38,25 @@ class _ConflictBannerState extends State<ConflictBanner> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Row(
                 children: [
-                  const Icon(Icons.warning_amber,
-                      color: Colors.amber, size: 16),
+                  const Icon(
+                    Icons.warning_amber,
+                    color: Colors.amber,
+                    size: 16,
+                  ),
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text(
                       'Conflict detected with prior decision',
                       style: TextStyle(
-                          color: Colors.amber,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500),
+                        color: Colors.amber,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                   if (widget.conflictMetadata != null)
                     Icon(
-                      _expanded
-                          ? Icons.expand_less
-                          : Icons.expand_more,
+                      _expanded ? Icons.expand_less : Icons.expand_more,
                       color: Colors.amber,
                       size: 18,
                     ),
@@ -81,11 +83,15 @@ class _ConflictBannerState extends State<ConflictBanner> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: widget.conflictMetadata!.entries
-                    .map((e) => Text(
-                          '${e.key}: ${e.value}',
-                          style: const TextStyle(
-                              fontSize: 12, color: Colors.white70),
-                        ))
+                    .map(
+                      (e) => Text(
+                        '${e.key}: ${e.value}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    )
                     .toList(),
               ),
             ),
