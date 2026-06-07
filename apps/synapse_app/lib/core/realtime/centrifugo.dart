@@ -6,7 +6,7 @@ class CentrifugoClient {
   WebSocketChannel? _channel;
   int _idCounter = 0;
   final Map<String, StreamController<Map<String, dynamic>>>
-      _subscriptionControllers = {};
+  _subscriptionControllers = {};
 
   Future<void> connect(String wsUrl, String token) async {
     _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
@@ -16,11 +16,7 @@ class CentrifugoClient {
     });
     _channel!.sink.add(connectMsg);
 
-    _channel!.stream.listen(
-      _onMessage,
-      onError: _onError,
-      onDone: _onDone,
-    );
+    _channel!.stream.listen(_onMessage, onError: _onError, onDone: _onDone);
   }
 
   Stream<Map<String, dynamic>> subscribeToThread(String threadId) {

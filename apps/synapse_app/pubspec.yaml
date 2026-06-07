@@ -26,6 +26,8 @@ dependencies:
   uuid: ^4.0.0
   # OIDC login via Casdoor (Cerebro jwt_oidc mode)
   casdoor_flutter_sdk: ^1.1.0
+  # Desktop window chrome (hidden native titlebar + custom draggable frame)
+  window_manager: ^0.3.9
 
 dev_dependencies:
   flutter_test:

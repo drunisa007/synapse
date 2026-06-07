@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../core/api/client.dart';
 import '../core/realtime/realtime_client.dart';
+import '../ui/synapse_tokens.dart';
 
 /// Transient status indicator for live council events that the durable
 /// [DeliberationRoundsCard] doesn't surface in real time. Watches the
@@ -118,27 +119,27 @@ class _LiveStatusBannerState extends State<LiveStatusBanner> {
     if (status == null) return const SizedBox.shrink();
 
     final (color, text) = switch (status) {
-      RedTeamInProgress _ => (
-        Colors.red,
-        'Red team round in progress…',
-      ),
+      RedTeamInProgress _ => (SynColors.red, 'Red team round in progress...'),
       RedTeamComplete s => (
-        Colors.red.shade300,
-        'Red team complete — ${s.count} attack${s.count == 1 ? '' : 's'} recorded',
+        SynColors.red,
+        'Red team complete: ${s.count} attack${s.count == 1 ? '' : 's'} recorded',
       ),
       DeliberationRound s => (
-        Colors.deepPurple,
-        'Deliberation round ${s.round} in progress…',
+        SynColors.primary,
+        'Deliberation round ${s.round} in progress...',
       ),
     };
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: const EdgeInsets.all(SynSpacing.md),
+      padding: const EdgeInsets.symmetric(
+        horizontal: SynSpacing.md,
+        vertical: SynSpacing.sm,
+      ),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.10),
         border: Border.all(color: color.withValues(alpha: 0.4)),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(SynRadii.lg),
       ),
       child: Row(
         children: [
@@ -149,10 +150,7 @@ class _LiveStatusBannerState extends State<LiveStatusBanner> {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              text,
-              style: TextStyle(fontSize: 13, color: color),
-            ),
+            child: Text(text, style: TextStyle(fontSize: 13, color: color)),
           ),
         ],
       ),

@@ -48,16 +48,16 @@ class _RoundTile extends StatelessWidget {
   const _RoundTile({required this.round});
 
   String get _modeLabel => switch (round.mode) {
-        'red_team' => 'Red team',
-        'deliberation' => 'Deliberation',
-        _ => round.mode,
-      };
+    'red_team' => 'Red team',
+    'deliberation' => 'Deliberation',
+    _ => round.mode,
+  };
 
   Color get _accent => switch (round.mode) {
-        'red_team' => Colors.red,
-        'deliberation' => Colors.deepPurple,
-        _ => Colors.grey,
-      };
+    'red_team' => Colors.red,
+    'deliberation' => Colors.deepPurple,
+    _ => Colors.grey,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -85,8 +85,7 @@ class _RoundTile extends StatelessWidget {
             if (round.converged) ...[
               const SizedBox(width: 8),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: Colors.green.withValues(alpha: 0.25),
                   borderRadius: BorderRadius.circular(8),
@@ -144,14 +143,18 @@ class _CritiqueList extends StatelessWidget {
                   Text(
                     c.memberName,
                     style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w500),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   if (c.error != null)
                     Text(
                       'error: ${c.error}',
                       style: const TextStyle(
-                          fontSize: 11, color: Colors.redAccent),
+                        fontSize: 11,
+                        color: Colors.redAccent,
+                      ),
                     )
                   else
                     Text(c.critique, style: const TextStyle(fontSize: 12)),
@@ -198,7 +201,9 @@ class _RevisedList extends StatelessWidget {
                   Text(
                     (r['member'] as String?) ?? 'member ${i + 1}',
                     style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w500),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
