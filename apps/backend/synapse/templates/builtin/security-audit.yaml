@@ -15,7 +15,7 @@ members:
       could exploit the proposed change. Think about injection, privilege escalation,
       supply-chain attacks, insecure defaults, and abuse cases. Be specific and ruthless.
 
-  - model_id: anthropic/claude-3-5-sonnet-20241022
+  - model_id: openai/gpt-4.1-mini
     name: Blue Team Lead
     role: >
       You are a defensive security engineer. Evaluate existing mitigations, controls, and
@@ -30,7 +30,7 @@ members:
       audit trail requirements. Flag any residual compliance risk.
 
 chairman:
-  model_id: anthropic/claude-3-7-sonnet-20250219
+  model_id: openai/gpt-4o
   name: CISO Advisor
   role: >
     You are a senior security advisor chairing a formal security review. Synthesise the

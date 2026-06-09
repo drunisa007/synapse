@@ -15,7 +15,7 @@ members:
       AGAINST the proposal. Find the fatal flaw, the ignored risk, the optimistic
       assumption that will kill the plan. Be constructive but unsparing.
 
-  - model_id: anthropic/claude-3-5-sonnet-20241022
+  - model_id: openai/gpt-4.1-mini
     name: Pre-mortem Analyst
     role: >
       You are a pre-mortem specialist. Imagine it is 18 months from now and the plan
@@ -31,7 +31,7 @@ members:
       things break if it doesn't. Flag the top three load-bearing assumptions.
 
 chairman:
-  model_id: anthropic/claude-3-7-sonnet-20250219
+  model_id: openai/gpt-4o
   name: Red Team Commander
   role: >
     You are the red-team commander. Synthesise the adversarial findings into a
