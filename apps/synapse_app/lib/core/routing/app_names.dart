@@ -12,6 +12,7 @@ abstract class AppNames {
   // ── Auth / setup ──────────────────────────────────────────────────────
   static const serverSetupScreen = 'server-setup';
   static const loginScreen = 'login';
+  static const registerScreen = 'register';
 
   // ── Main app surface ──────────────────────────────────────────────────
   static const councilListScreen = 'councils';
@@ -27,5 +28,6 @@ abstract class AppNames {
   static const analyticsScreen = 'analytics';
   static const notificationsScreen = 'notifications';
   static const notificationsSettingsScreen = 'notifications-settings';
+  static const profileScreen = 'settings-profile';
   static const settingsScreen = 'settings';
 }

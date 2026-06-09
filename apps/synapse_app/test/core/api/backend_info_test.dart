@@ -17,6 +17,7 @@ void main() {
       expect(info.authMode, 'local');
       expect(info.oidcIssuer, isNull);
       expect(info.oidcClientId, isNull);
+      expect(info.localRegistrationOpen, isNull);
     });
 
     test('parses cerebro response with jwt_oidc and oidc block', () {
@@ -78,6 +79,20 @@ void main() {
 
       expect(info.oidcIssuer, isNull);
       expect(info.oidcClientId, isNull);
+    });
+
+    test('parses optional local registration availability when present', () {
+      final info = BackendInfo.fromJson({
+        'backend': 'synapse',
+        'version': '1.0.0',
+        'auth_mode': 'local',
+        'multi_tenant': false,
+        'billing': false,
+        'features': {},
+        'local_registration_open': true,
+      });
+
+      expect(info.localRegistrationOpen, isTrue);
     });
   });
 }
