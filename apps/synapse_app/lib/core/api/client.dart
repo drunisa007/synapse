@@ -463,6 +463,25 @@ class SynapseApiClient {
     return (body['data'] as List<dynamic>?) ?? [];
   }
 
+  Future<TopicAnalytics> getAnalyticsTopics({
+    bool cluster = false,
+    int? limit,
+  }) async {
+    final headers = await _authHeaders();
+    final query = <String, String>{
+      if (limit != null) 'limit': '$limit',
+      if (cluster) 'cluster': 'true',
+    };
+    final uri = Uri.parse(
+      '$baseUrl/v1/analytics/topics',
+    ).replace(queryParameters: query.isEmpty ? null : query);
+    final response = await _httpClient.get(uri, headers: headers);
+    _checkResponse(response);
+    return TopicAnalytics.fromJson(
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
+    );
+  }
+
   // -------------------------------------------------------------------------
   // Chat-with-tools (Mode 4) — free-standing chat sessions.
   // -------------------------------------------------------------------------
