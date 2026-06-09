@@ -559,6 +559,63 @@ class BackendInfo {
   }
 }
 
+// ─── Analytics topics (W7 / B8) ──────────────────────────────────────────
+
+class TopicSummary {
+  final String? topicTag;
+  final int count;
+  final double? avgConsensus;
+
+  const TopicSummary({
+    required this.topicTag,
+    required this.count,
+    required this.avgConsensus,
+  });
+
+  String get label {
+    final value = topicTag?.trim();
+    return value == null || value.isEmpty ? 'Untagged' : value;
+  }
+
+  factory TopicSummary.fromJson(Map<String, dynamic> json) {
+    return TopicSummary(
+      topicTag: json['topic_tag'] as String?,
+      count: ((json['count'] as num?) ?? 0).toInt(),
+      avgConsensus: (json['avg_consensus'] as num?)?.toDouble(),
+    );
+  }
+}
+
+class TopicAnalytics {
+  final List<TopicSummary> topics;
+  final String? generatedAt;
+  final String? tenantId;
+  final String clusters;
+  final List<dynamic> clusterSources;
+
+  const TopicAnalytics({
+    required this.topics,
+    this.generatedAt,
+    this.tenantId,
+    this.clusters = '',
+    this.clusterSources = const [],
+  });
+
+  factory TopicAnalytics.fromJson(Map<String, dynamic> json) {
+    return TopicAnalytics(
+      topics:
+          (json['data'] as List<dynamic>?)
+              ?.map((e) => TopicSummary.fromJson(e as Map<String, dynamic>))
+              .toList(growable: false) ??
+          const <TopicSummary>[],
+      generatedAt: json['generated_at'] as String?,
+      tenantId: json['tenant_id'] as String?,
+      clusters: (json['clusters'] as String?) ?? '',
+      clusterSources: (json['cluster_sources'] as List<dynamic>?) ?? const [],
+    );
+  }
+}
+
 // ─── Memory hits (W4 / F-extend) ─────────────────────────────────────────
 
 class MemoryHit {
