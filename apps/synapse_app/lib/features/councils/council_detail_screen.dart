@@ -146,6 +146,7 @@ class _CouncilDetailScreenState extends State<CouncilDetailScreen> {
                   child: _CouncilThreadPane(
                     sessionId: council.sessionId,
                     councilStatus: council.status,
+                    council: council,
                     client: widget.client,
                   ),
                 ),
@@ -390,6 +391,7 @@ class _NarrowLayout extends StatelessWidget {
                     child: _CouncilThreadPane(
                       sessionId: council.sessionId,
                       councilStatus: council.status,
+                      council: council,
                       client: client,
                     ),
                   ),
@@ -406,11 +408,13 @@ class _NarrowLayout extends StatelessWidget {
 class _CouncilThreadPane extends StatelessWidget {
   final String sessionId;
   final String councilStatus;
+  final CouncilDetail? council;
   final SynapseApiClient client;
 
   const _CouncilThreadPane({
     required this.sessionId,
     required this.councilStatus,
+    this.council,
     required this.client,
   });
 
@@ -432,6 +436,7 @@ class _CouncilThreadPane extends StatelessWidget {
           sessionId: sessionId,
           threadId: snapshot.data!,
           councilStatus: councilStatus,
+          council: council,
           client: client,
         );
       },

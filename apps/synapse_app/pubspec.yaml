@@ -30,6 +30,7 @@ dependencies:
   casdoor_flutter_sdk: ^1.1.0
   # Desktop window chrome, initial size, maximize, close-to-tray
   window_manager: ^0.4.3
+  flutter_markdown_plus: ^1.0.7
 
 dev_dependencies:
   flutter_test:

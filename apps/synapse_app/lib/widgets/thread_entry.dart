@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/api/models.dart';
 import '../ui/synapse_components.dart';
 import '../ui/synapse_tokens.dart';
+import 'markdown_text.dart';
 import 'verdict_card.dart';
 import 'conflict_banner.dart';
 
@@ -125,6 +126,7 @@ class _MemberResponseEntry extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final content = event.content ?? '';
+    final error = event.metadata['error']?.toString();
     final isLong = content.length > 300;
     final displayContent = isLong && !expanded
         ? '${content.substring(0, 300)}…'
@@ -165,10 +167,17 @@ class _MemberResponseEntry extends StatelessWidget {
               ],
             ),
             const SizedBox(height: SynSpacing.sm),
-            Text(
-              displayContent,
-              style: const TextStyle(fontSize: 13, height: 1.5),
-            ),
+            if (displayContent.trim().isNotEmpty)
+              SynMarkdownText(data: displayContent)
+            else
+              Text(
+                error == null ? 'No response content.' : 'Failed: $error',
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.5,
+                  color: error == null ? SynColors.textMuted : SynColors.red,
+                ),
+              ),
             if (isLong)
               TextButton(
                 onPressed: onToggle,
@@ -304,14 +313,7 @@ class _ReflectionEntry extends StatelessWidget {
               ],
             ),
             const SizedBox(height: SynSpacing.sm),
-            Text(
-              event.content ?? '',
-              style: const TextStyle(
-                fontSize: 13,
-                height: 1.5,
-                color: SynColors.text,
-              ),
-            ),
+            SynMarkdownText(data: event.content ?? ''),
           ],
         ),
       ),
@@ -340,9 +342,10 @@ class _UserMessageEntry extends StatelessWidget {
           color: SynColors.primaryStrong,
           borderRadius: BorderRadius.circular(SynRadii.lg),
         ),
-        child: Text(
-          event.content ?? '',
-          style: const TextStyle(fontSize: 13, height: 1.4),
+        child: SynMarkdownText(
+          data: event.content ?? '',
+          color: Colors.white,
+          lineHeight: 1.4,
         ),
       ),
     );
@@ -361,9 +364,11 @@ class _DefaultEventEntry extends StatelessWidget {
         horizontal: SynSpacing.md,
         vertical: SynSpacing.xs,
       ),
-      child: Text(
-        '[${event.eventType}] ${event.content ?? ''}',
-        style: const TextStyle(color: SynColors.textFaint, fontSize: 11),
+      child: SynMarkdownText(
+        data: '[${event.eventType}] ${event.content ?? ''}',
+        color: SynColors.textFaint,
+        fontSize: 11,
+        selectable: false,
       ),
     );
   }
