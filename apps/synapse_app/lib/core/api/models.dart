@@ -567,6 +567,7 @@ class MemoryHit {
   final double score;
   final String bankId;
   final List<String> tags;
+  final Map<String, dynamic> metadata;
 
   const MemoryHit({
     required this.memoryId,
@@ -574,6 +575,7 @@ class MemoryHit {
     required this.score,
     required this.bankId,
     required this.tags,
+    this.metadata = const {},
   });
 
   factory MemoryHit.fromJson(Map<String, dynamic> json) {
@@ -583,7 +585,126 @@ class MemoryHit {
       score: ((json['score'] as num?) ?? 0).toDouble(),
       bankId: (json['bank_id'] as String?) ?? '',
       tags: ((json['tags'] as List?) ?? []).map((e) => e.toString()).toList(),
+      metadata: Map<String, dynamic>.from(
+        (json['metadata'] as Map<dynamic, dynamic>?) ?? {},
+      ),
     );
+  }
+}
+
+class RetainMemoryResponse {
+  final String memoryId;
+  final bool stored;
+
+  const RetainMemoryResponse({required this.memoryId, required this.stored});
+
+  factory RetainMemoryResponse.fromJson(Map<String, dynamic> json) {
+    return RetainMemoryResponse(
+      memoryId: (json['memory_id'] as String?) ?? '',
+      stored: (json['stored'] as bool?) ?? false,
+    );
+  }
+}
+
+class MemoryReflection {
+  final String answer;
+  final List<dynamic> sources;
+
+  const MemoryReflection({required this.answer, required this.sources});
+
+  factory MemoryReflection.fromJson(Map<String, dynamic> json) {
+    return MemoryReflection(
+      answer: (json['answer'] as String?) ?? '',
+      sources: (json['sources'] as List<dynamic>?) ?? const [],
+    );
+  }
+}
+
+class MemoryGraphEntity {
+  final String entityId;
+  final String name;
+  final String entityType;
+  final Map<String, dynamic> metadata;
+
+  const MemoryGraphEntity({
+    required this.entityId,
+    required this.name,
+    required this.entityType,
+    this.metadata = const {},
+  });
+
+  factory MemoryGraphEntity.fromJson(Map<String, dynamic> json) {
+    return MemoryGraphEntity(
+      entityId: (json['entity_id'] as String?) ?? '',
+      name: (json['name'] as String?) ?? '',
+      entityType: (json['entity_type'] as String?) ?? '',
+      metadata: Map<String, dynamic>.from(
+        (json['metadata'] as Map<dynamic, dynamic>?) ?? {},
+      ),
+    );
+  }
+}
+
+class MemoryGraphSearchResponse {
+  final String query;
+  final String bank;
+  final int count;
+  final List<MemoryGraphEntity> entities;
+
+  const MemoryGraphSearchResponse({
+    required this.query,
+    required this.bank,
+    required this.count,
+    required this.entities,
+  });
+
+  factory MemoryGraphSearchResponse.fromJson(Map<String, dynamic> json) {
+    final entities =
+        (json['entities'] as List<dynamic>?)
+            ?.map((e) => MemoryGraphEntity.fromJson(e as Map<String, dynamic>))
+            .toList(growable: false) ??
+        const <MemoryGraphEntity>[];
+    return MemoryGraphSearchResponse(
+      query: (json['query'] as String?) ?? '',
+      bank: (json['bank'] as String?) ?? '',
+      count: (json['count'] as int?) ?? entities.length,
+      entities: entities,
+    );
+  }
+}
+
+class MemoryGraphNeighborsResponse {
+  final String bank;
+  final int count;
+  final List<MemoryHit> hits;
+
+  const MemoryGraphNeighborsResponse({
+    required this.bank,
+    required this.count,
+    required this.hits,
+  });
+
+  factory MemoryGraphNeighborsResponse.fromJson(Map<String, dynamic> json) {
+    final hits =
+        (json['hits'] as List<dynamic>?)
+            ?.map((e) => MemoryHit.fromJson(e as Map<String, dynamic>))
+            .toList(growable: false) ??
+        const <MemoryHit>[];
+    return MemoryGraphNeighborsResponse(
+      bank: (json['bank'] as String?) ?? '',
+      count: (json['count'] as int?) ?? hits.length,
+      hits: hits,
+    );
+  }
+}
+
+class CompileMemoryResponse {
+  final Map<String, dynamic> data;
+
+  const CompileMemoryResponse({required this.data});
+
+  factory CompileMemoryResponse.fromJson(Map<String, dynamic> json) {
+    return CompileMemoryResponse(data: Map<String, dynamic>.from(json));
   }
 }
 
