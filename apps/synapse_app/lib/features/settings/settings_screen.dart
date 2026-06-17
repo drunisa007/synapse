@@ -98,50 +98,76 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         const SizedBox(height: SynSpacing.md),
-        SynSurface(
+        _SettingsRow(
+          icon: Icons.person_outline,
+          color: SynColors.primary,
+          title: 'Profile',
+          subtitle: 'Account, role, and sign out.',
+          onTap: () => context.push('/settings/profile'),
+        ),
+        const SizedBox(height: SynSpacing.md),
+        _SettingsRow(
+          icon: Icons.notifications_outlined,
+          color: SynColors.cyan,
+          title: 'Notifications',
+          subtitle: 'Email, push, ntfy fallback, and registered devices.',
           onTap: () => context.push('/settings/notifications'),
-          child: Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: SynColors.cyan.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(SynRadii.md),
-                  border: Border.all(
-                    color: SynColors.cyan.withValues(alpha: 0.28),
-                  ),
-                ),
-                child: const Icon(
-                  Icons.notifications_outlined,
-                  size: 18,
-                  color: SynColors.cyan,
-                ),
-              ),
-              const SizedBox(width: SynSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Notifications',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    const SizedBox(height: SynSpacing.xs),
-                    Text(
-                      'Email, push, ntfy fallback, and registered devices.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: SynColors.textMuted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right, color: SynColors.textMuted),
-            ],
-          ),
         ),
       ],
+    );
+  }
+}
+
+class _SettingsRow extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _SettingsRow({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SynSurface(
+      onTap: onTap,
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(SynRadii.md),
+              border: Border.all(color: color.withValues(alpha: 0.28)),
+            ),
+            child: Icon(icon, size: 18, color: color),
+          ),
+          const SizedBox(width: SynSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: SynSpacing.xs),
+                Text(
+                  subtitle,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: SynColors.textMuted),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right, color: SynColors.textMuted),
+        ],
+      ),
     );
   }
 }

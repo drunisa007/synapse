@@ -50,11 +50,11 @@ class Settings(BaseSettings):
 
     # --- Council defaults ---
     default_members: list[dict] = [
-        {"model_id": "gpt-4o", "name": "GPT-4o"},
-        {"model_id": "claude-3-5-sonnet-20241022", "name": "Claude"},
-        {"model_id": "gemini/gemini-1.5-pro", "name": "Gemini"},
+        {"model_id": "openai/gpt-4o", "name": "GPT-4o"},
+        {"model_id": "openai/gpt-4o-mini", "name": "GPT-4o Mini"},
+        {"model_id": "openai/gpt-4.1-mini", "name": "GPT-4.1 Mini"},
     ]
-    default_chairman: dict = {"model_id": "claude-opus-4-5", "name": "Chair"}
+    default_chairman: dict = {"model_id": "openai/gpt-4o", "name": "Chair"}
     stage1_timeout_seconds: int = 60
     stage2_timeout_seconds: int = 60
     stage3_timeout_seconds: int = 90

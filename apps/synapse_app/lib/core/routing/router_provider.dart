@@ -8,6 +8,7 @@ import '../api/client.dart';
 import '../providers/services.dart';
 import '../../features/analytics/analytics_screen.dart';
 import '../../features/auth/login_screen.dart';
+import '../../features/auth/register_screen.dart';
 import '../../features/chat/chat_screen.dart';
 import '../../features/chat/chat_session_detail_screen.dart';
 import '../../features/chat/chat_sessions_screen.dart';
@@ -20,6 +21,7 @@ import '../../features/memory/memory_screen.dart';
 import '../../features/notifications/notifications_screen.dart';
 import '../../features/server_setup/server_setup_screen.dart';
 import '../../features/settings/notifications_settings_screen.dart';
+import '../../features/settings/profile_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../ui/synapse_components.dart';
 import '../../ui/synapse_navigation_history.dart';
@@ -71,6 +73,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     AppPaths.home,
     AppPaths.serverSetup,
     AppPaths.login,
+    AppPaths.register,
   };
 
   router = GoRouter(
@@ -136,8 +139,19 @@ final routerProvider = Provider<GoRouter>((ref) {
       // ── Auth ──────────────────────────────────────────────────────────
       GoRoute(
         path: AppPaths.login,
-        builder: (context, state) =>
-            LoginScreen(tokenStore: tokenStore, serverStore: serverStore),
+        builder: (context, state) => LoginScreen(
+          tokenStore: tokenStore,
+          serverStore: serverStore,
+          apiClient: client,
+        ),
+      ),
+      GoRoute(
+        path: AppPaths.register,
+        builder: (context, state) => RegisterScreen(
+          apiClient: client,
+          tokenStore: tokenStore,
+          serverStore: serverStore,
+        ),
       ),
 
       ShellRoute(
@@ -259,6 +273,22 @@ final routerProvider = Provider<GoRouter>((ref) {
                 body: NotificationsSettingsScreen(
                   apiClient: client,
                   notificationService: notifications,
+                ),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: AppPaths.settingsProfile,
+            pageBuilder: (context, state) => NoTransitionPage(
+              child: SynapseWorkspaceFrame(
+                selected: SynapseNavItem.settings,
+                title: 'Profile',
+                subtitle: 'Account and session.',
+                onBack: () => context.go(AppPaths.settings),
+                body: ProfileScreen(
+                  apiClient: client,
+                  tokenStore: tokenStore,
+                  serverStore: serverStore,
                 ),
               ),
             ),

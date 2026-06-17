@@ -15,7 +15,7 @@ members:
       the lens of user needs, pain points, and behaviour. Use Jobs-to-be-Done framing.
       Challenge features that solve internal problems rather than user problems.
 
-  - model_id: anthropic/claude-3-5-sonnet-20241022
+  - model_id: openai/gpt-4.1-mini
     name: Business Analyst
     role: >
       You are a business analyst. Assess impact on revenue, retention, and strategic
@@ -30,7 +30,7 @@ members:
       Represent the delivery reality that product plans often underestimate.
 
 chairman:
-  model_id: anthropic/claude-3-7-sonnet-20250219
+  model_id: openai/gpt-4o
   name: Product Director
   role: >
     You are the product director chairing the decision council. Synthesise user value,

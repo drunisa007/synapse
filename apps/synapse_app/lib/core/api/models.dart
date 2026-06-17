@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class CouncilSummary {
   final String sessionId;
   final String question;
@@ -531,6 +533,9 @@ class BackendInfo {
   /// OIDC client ID (present when authMode == "jwt_oidc")
   final String? oidcClientId;
 
+  /// Nullable because current Synapse /v1/info does not expose this yet.
+  final bool? localRegistrationOpen;
+
   const BackendInfo({
     required this.backend,
     required this.version,
@@ -540,6 +545,7 @@ class BackendInfo {
     required this.realtime,
     this.oidcIssuer,
     this.oidcClientId,
+    this.localRegistrationOpen,
   });
 
   factory BackendInfo.fromJson(Map<String, dynamic> json) {
@@ -555,7 +561,118 @@ class BackendInfo {
       realtime: (json['realtime'] as String?) ?? 'centrifugo',
       oidcIssuer: oidc?['issuer'] as String?,
       oidcClientId: oidc?['client_id'] as String?,
+      localRegistrationOpen:
+          (json['local_registration_open'] as bool?) ??
+          (json['registration_open'] as bool?),
     );
+  }
+}
+
+// ─── Auth/profile (local auth + token fallback) ──────────────────────────
+
+class AuthToken {
+  final String accessToken;
+  final String tokenType;
+  final int? expiresIn;
+
+  const AuthToken({
+    required this.accessToken,
+    required this.tokenType,
+    this.expiresIn,
+  });
+
+  factory AuthToken.fromJson(Map<String, dynamic> json) {
+    return AuthToken(
+      accessToken: (json['access_token'] as String?) ?? '',
+      tokenType: (json['token_type'] as String?) ?? 'bearer',
+      expiresIn: (json['expires_in'] as num?)?.toInt(),
+    );
+  }
+}
+
+class CurrentUser {
+  final String id;
+  final String email;
+  final String role;
+
+  const CurrentUser({
+    required this.id,
+    required this.email,
+    required this.role,
+  });
+
+  factory CurrentUser.fromJson(Map<String, dynamic> json) {
+    return CurrentUser(
+      id: (json['id'] as String?) ?? '',
+      email: (json['email'] as String?) ?? '',
+      role: (json['role'] as String?) ?? '',
+    );
+  }
+}
+
+class TokenIdentity {
+  final String? sub;
+  final String? email;
+  final List<String> roles;
+  final String? tenantId;
+
+  const TokenIdentity({
+    this.sub,
+    this.email,
+    this.roles = const [],
+    this.tenantId,
+  });
+
+  String get displayName {
+    final value = email?.trim();
+    if (value != null && value.isNotEmpty) return value;
+    final principal = sub?.trim();
+    if (principal != null && principal.isNotEmpty) return principal;
+    return 'Authenticated token';
+  }
+
+  factory TokenIdentity.fromClaims(Map<String, dynamic> claims) {
+    final roleValues = <String>[];
+    final role = claims['role'];
+    final roles = claims['roles'];
+    if (role is String && role.isNotEmpty) roleValues.add(role);
+    if (roles is List) {
+      roleValues.addAll(
+        roles
+            .map((value) => value.toString())
+            .where((value) => value.isNotEmpty),
+      );
+    } else if (roles is String && roles.isNotEmpty) {
+      roleValues.add(roles);
+    }
+
+    return TokenIdentity(
+      sub: claims['sub'] as String?,
+      email: (claims['email'] ?? claims['preferred_username']) as String?,
+      roles: roleValues.toSet().toList(growable: false),
+      tenantId:
+          (claims['tenant_id'] ??
+                  claims['synapse_tenant'] ??
+                  claims['tid'] ??
+                  claims['tenant'])
+              as String?,
+    );
+  }
+
+  static TokenIdentity? tryParseJwt(String? token) {
+    if (token == null) return null;
+    final parts = token.split('.');
+    if (parts.length < 2) return null;
+    try {
+      final payload = utf8.decode(
+        base64Url.decode(base64Url.normalize(parts[1])),
+      );
+      final claims = jsonDecode(payload);
+      if (claims is! Map<String, dynamic>) return null;
+      return TokenIdentity.fromClaims(claims);
+    } catch (_) {
+      return null;
+    }
   }
 }
 
@@ -567,6 +684,7 @@ class MemoryHit {
   final double score;
   final String bankId;
   final List<String> tags;
+  final Map<String, dynamic> metadata;
 
   const MemoryHit({
     required this.memoryId,
@@ -574,6 +692,7 @@ class MemoryHit {
     required this.score,
     required this.bankId,
     required this.tags,
+    this.metadata = const {},
   });
 
   factory MemoryHit.fromJson(Map<String, dynamic> json) {
@@ -583,7 +702,126 @@ class MemoryHit {
       score: ((json['score'] as num?) ?? 0).toDouble(),
       bankId: (json['bank_id'] as String?) ?? '',
       tags: ((json['tags'] as List?) ?? []).map((e) => e.toString()).toList(),
+      metadata: Map<String, dynamic>.from(
+        (json['metadata'] as Map<dynamic, dynamic>?) ?? {},
+      ),
     );
+  }
+}
+
+class RetainMemoryResponse {
+  final String memoryId;
+  final bool stored;
+
+  const RetainMemoryResponse({required this.memoryId, required this.stored});
+
+  factory RetainMemoryResponse.fromJson(Map<String, dynamic> json) {
+    return RetainMemoryResponse(
+      memoryId: (json['memory_id'] as String?) ?? '',
+      stored: (json['stored'] as bool?) ?? false,
+    );
+  }
+}
+
+class MemoryReflection {
+  final String answer;
+  final List<dynamic> sources;
+
+  const MemoryReflection({required this.answer, required this.sources});
+
+  factory MemoryReflection.fromJson(Map<String, dynamic> json) {
+    return MemoryReflection(
+      answer: (json['answer'] as String?) ?? '',
+      sources: (json['sources'] as List<dynamic>?) ?? const [],
+    );
+  }
+}
+
+class MemoryGraphEntity {
+  final String entityId;
+  final String name;
+  final String entityType;
+  final Map<String, dynamic> metadata;
+
+  const MemoryGraphEntity({
+    required this.entityId,
+    required this.name,
+    required this.entityType,
+    this.metadata = const {},
+  });
+
+  factory MemoryGraphEntity.fromJson(Map<String, dynamic> json) {
+    return MemoryGraphEntity(
+      entityId: (json['entity_id'] as String?) ?? '',
+      name: (json['name'] as String?) ?? '',
+      entityType: (json['entity_type'] as String?) ?? '',
+      metadata: Map<String, dynamic>.from(
+        (json['metadata'] as Map<dynamic, dynamic>?) ?? {},
+      ),
+    );
+  }
+}
+
+class MemoryGraphSearchResponse {
+  final String query;
+  final String bank;
+  final int count;
+  final List<MemoryGraphEntity> entities;
+
+  const MemoryGraphSearchResponse({
+    required this.query,
+    required this.bank,
+    required this.count,
+    required this.entities,
+  });
+
+  factory MemoryGraphSearchResponse.fromJson(Map<String, dynamic> json) {
+    final entities =
+        (json['entities'] as List<dynamic>?)
+            ?.map((e) => MemoryGraphEntity.fromJson(e as Map<String, dynamic>))
+            .toList(growable: false) ??
+        const <MemoryGraphEntity>[];
+    return MemoryGraphSearchResponse(
+      query: (json['query'] as String?) ?? '',
+      bank: (json['bank'] as String?) ?? '',
+      count: (json['count'] as int?) ?? entities.length,
+      entities: entities,
+    );
+  }
+}
+
+class MemoryGraphNeighborsResponse {
+  final String bank;
+  final int count;
+  final List<MemoryHit> hits;
+
+  const MemoryGraphNeighborsResponse({
+    required this.bank,
+    required this.count,
+    required this.hits,
+  });
+
+  factory MemoryGraphNeighborsResponse.fromJson(Map<String, dynamic> json) {
+    final hits =
+        (json['hits'] as List<dynamic>?)
+            ?.map((e) => MemoryHit.fromJson(e as Map<String, dynamic>))
+            .toList(growable: false) ??
+        const <MemoryHit>[];
+    return MemoryGraphNeighborsResponse(
+      bank: (json['bank'] as String?) ?? '',
+      count: (json['count'] as int?) ?? hits.length,
+      hits: hits,
+    );
+  }
+}
+
+class CompileMemoryResponse {
+  final Map<String, dynamic> data;
+
+  const CompileMemoryResponse({required this.data});
+
+  factory CompileMemoryResponse.fromJson(Map<String, dynamic> json) {
+    return CompileMemoryResponse(data: Map<String, dynamic>.from(json));
   }
 }
 

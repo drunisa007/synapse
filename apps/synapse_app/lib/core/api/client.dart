@@ -77,6 +77,48 @@ class SynapseApiClient {
     return const [];
   }
 
+  Future<CurrentUser> getCurrentUser() async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('$baseUrl/v1/auth/me');
+    final response = await _httpClient.get(uri, headers: headers);
+    _checkResponse(response);
+    return CurrentUser.fromJson(
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
+    );
+  }
+
+  Future<AuthToken> loginLocalUser({
+    required String email,
+    required String password,
+  }) async {
+    final uri = Uri.parse('$baseUrl/v1/auth/login');
+    final response = await _httpClient.post(
+      uri,
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'password': password}),
+    );
+    _checkResponse(response);
+    return AuthToken.fromJson(
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
+    );
+  }
+
+  Future<AuthToken> registerLocalUser({
+    required String email,
+    required String password,
+  }) async {
+    final uri = Uri.parse('$baseUrl/v1/auth/register');
+    final response = await _httpClient.post(
+      uri,
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'password': password}),
+    );
+    _checkResponse(response);
+    return AuthToken.fromJson(
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
+    );
+  }
+
   Future<List<CouncilSummary>> listCouncils({
     int limit = 50,
     int offset = 0,
@@ -382,9 +424,8 @@ class SynapseApiClient {
   }) async {
     final headers = await _authHeaders();
     final uri = Uri.parse(
-      '$baseUrl/v1/memory/search?q=${Uri.encodeQueryComponent(query)}'
-      '&bank=$bank&limit=$limit',
-    );
+      '$baseUrl/v1/memory/search',
+    ).replace(queryParameters: {'q': query, 'bank': bank, 'limit': '$limit'});
     final response = await _httpClient.get(uri, headers: headers);
     _checkResponse(response);
     final body = _unwrap(jsonDecode(response.body) as Map<String, dynamic>);
@@ -392,6 +433,134 @@ class SynapseApiClient {
     return list
         .map((e) => MemoryHit.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<RetainMemoryResponse> retainMemory({
+    required String content,
+    String bankId = 'agents',
+    List<String> tags = const [],
+    Map<String, dynamic>? metadata,
+  }) async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('$baseUrl/v1/memory/retain');
+    final response = await _httpClient.post(
+      uri,
+      headers: headers,
+      body: jsonEncode({
+        'content': content,
+        'bank_id': bankId,
+        'tags': tags,
+        'metadata': metadata ?? const <String, dynamic>{},
+      }),
+    );
+    _checkResponse(response);
+    return RetainMemoryResponse.fromJson(
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
+    );
+  }
+
+  Future<MemoryReflection> reflectMemory({
+    required String query,
+    String bankId = 'decisions',
+    int? maxTokens,
+    bool includeSources = true,
+  }) async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('$baseUrl/v1/memory/reflect');
+    final response = await _httpClient.post(
+      uri,
+      headers: headers,
+      body: jsonEncode({
+        'query': query,
+        'bank_id': bankId,
+        'include_sources': includeSources,
+        if (maxTokens != null) 'max_tokens': maxTokens,
+      }),
+    );
+    _checkResponse(response);
+    return MemoryReflection.fromJson(
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
+    );
+  }
+
+  Future<Map<String, dynamic>> forgetMemory({
+    String bankId = 'agents',
+    List<String>? memoryIds,
+    List<String>? tags,
+  }) async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('$baseUrl/v1/memory/forget');
+    final response = await _httpClient.post(
+      uri,
+      headers: headers,
+      body: jsonEncode({
+        'bank_id': bankId,
+        if (memoryIds != null) 'memory_ids': memoryIds,
+        if (tags != null) 'tags': tags,
+      }),
+    );
+    _checkResponse(response);
+    return _unwrap(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<MemoryGraphSearchResponse> graphSearchMemory({
+    required String query,
+    required String bankId,
+    int limit = 10,
+  }) async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('$baseUrl/v1/memory/graph/search');
+    final response = await _httpClient.post(
+      uri,
+      headers: headers,
+      body: jsonEncode({'query': query, 'bank_id': bankId, 'limit': limit}),
+    );
+    _checkResponse(response);
+    return MemoryGraphSearchResponse.fromJson(
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
+    );
+  }
+
+  Future<MemoryGraphNeighborsResponse> graphNeighborsMemory({
+    required List<String> entityIds,
+    required String bankId,
+    int maxDepth = 1,
+    int limit = 10,
+  }) async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('$baseUrl/v1/memory/graph/neighbors');
+    final response = await _httpClient.post(
+      uri,
+      headers: headers,
+      body: jsonEncode({
+        'entity_ids': entityIds,
+        'bank_id': bankId,
+        'max_depth': maxDepth,
+        'limit': limit,
+      }),
+    );
+    _checkResponse(response);
+    return MemoryGraphNeighborsResponse.fromJson(
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
+    );
+  }
+
+  Future<Map<String, dynamic>> compileMemory({
+    required String bankId,
+    Map<String, dynamic>? scope,
+  }) async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('$baseUrl/v1/memory/compile');
+    final response = await _httpClient.post(
+      uri,
+      headers: headers,
+      body: jsonEncode({
+        'bank_id': bankId,
+        if (scope != null) 'scope': jsonEncode(scope),
+      }),
+    );
+    _checkResponse(response);
+    return _unwrap(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   // ─── Analytics (B8 / F-extend) ────────────────────────────────────────────
@@ -419,6 +588,25 @@ class SynapseApiClient {
     _checkResponse(response);
     final body = _unwrap(jsonDecode(response.body) as Map<String, dynamic>);
     return (body['data'] as List<dynamic>?) ?? [];
+  }
+
+  Future<TopicAnalytics> getAnalyticsTopics({
+    bool cluster = false,
+    int? limit,
+  }) async {
+    final headers = await _authHeaders();
+    final query = <String, String>{
+      if (limit != null) 'limit': '$limit',
+      if (cluster) 'cluster': 'true',
+    };
+    final uri = Uri.parse(
+      '$baseUrl/v1/analytics/topics',
+    ).replace(queryParameters: query.isEmpty ? null : query);
+    final response = await _httpClient.get(uri, headers: headers);
+    _checkResponse(response);
+    return TopicAnalytics.fromJson(
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
+    );
   }
 
   // -------------------------------------------------------------------------
