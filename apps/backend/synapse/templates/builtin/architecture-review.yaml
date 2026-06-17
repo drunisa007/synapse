@@ -15,7 +15,7 @@ members:
       distributed-systems trade-offs. Cite CAP theorem, eventual consistency, and
       partitioning concerns where relevant.
 
-  - model_id: anthropic/claude-3-5-sonnet-20241022
+  - model_id: openai/gpt-4.1-mini
     name: Platform Engineer
     role: >
       You are a senior platform / SRE engineer. Prioritise operational concerns:
@@ -30,7 +30,7 @@ members:
       tooling ecosystem, local-dev ergonomics, and onboarding friction.
 
 chairman:
-  model_id: anthropic/claude-3-7-sonnet-20250219
+  model_id: openai/gpt-4o
   name: Chief Architect
   role: >
     You are the chief architect chairing a formal design review. Weigh scalability,

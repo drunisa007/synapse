@@ -15,7 +15,7 @@ members:
       edge cases, off-by-one errors, race conditions, null-handling bugs, and incorrect
       assumptions. Provide specific line-level observations where possible.
 
-  - model_id: anthropic/claude-3-5-sonnet-20241022
+  - model_id: openai/gpt-4.1-mini
     name: Performance Reviewer
     role: >
       You are a performance engineer. Identify algorithmic complexity issues, unnecessary
@@ -30,7 +30,7 @@ members:
       to SOLID principles. Flag anything that will create long-term maintenance burden.
 
 chairman:
-  model_id: anthropic/claude-3-7-sonnet-20250219
+  model_id: openai/gpt-4o
   name: Lead Reviewer
   role: >
     You are the lead reviewer chairing the code review. Synthesise correctness,

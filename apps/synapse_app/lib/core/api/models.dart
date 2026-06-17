@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class CouncilSummary {
   final String sessionId;
   final String question;
@@ -531,6 +533,9 @@ class BackendInfo {
   /// OIDC client ID (present when authMode == "jwt_oidc")
   final String? oidcClientId;
 
+  /// Nullable because current Synapse /v1/info does not expose this yet.
+  final bool? localRegistrationOpen;
+
   const BackendInfo({
     required this.backend,
     required this.version,
@@ -540,6 +545,7 @@ class BackendInfo {
     required this.realtime,
     this.oidcIssuer,
     this.oidcClientId,
+    this.localRegistrationOpen,
   });
 
   factory BackendInfo.fromJson(Map<String, dynamic> json) {
@@ -555,7 +561,118 @@ class BackendInfo {
       realtime: (json['realtime'] as String?) ?? 'centrifugo',
       oidcIssuer: oidc?['issuer'] as String?,
       oidcClientId: oidc?['client_id'] as String?,
+      localRegistrationOpen:
+          (json['local_registration_open'] as bool?) ??
+          (json['registration_open'] as bool?),
     );
+  }
+}
+
+// ─── Auth/profile (local auth + token fallback) ──────────────────────────
+
+class AuthToken {
+  final String accessToken;
+  final String tokenType;
+  final int? expiresIn;
+
+  const AuthToken({
+    required this.accessToken,
+    required this.tokenType,
+    this.expiresIn,
+  });
+
+  factory AuthToken.fromJson(Map<String, dynamic> json) {
+    return AuthToken(
+      accessToken: (json['access_token'] as String?) ?? '',
+      tokenType: (json['token_type'] as String?) ?? 'bearer',
+      expiresIn: (json['expires_in'] as num?)?.toInt(),
+    );
+  }
+}
+
+class CurrentUser {
+  final String id;
+  final String email;
+  final String role;
+
+  const CurrentUser({
+    required this.id,
+    required this.email,
+    required this.role,
+  });
+
+  factory CurrentUser.fromJson(Map<String, dynamic> json) {
+    return CurrentUser(
+      id: (json['id'] as String?) ?? '',
+      email: (json['email'] as String?) ?? '',
+      role: (json['role'] as String?) ?? '',
+    );
+  }
+}
+
+class TokenIdentity {
+  final String? sub;
+  final String? email;
+  final List<String> roles;
+  final String? tenantId;
+
+  const TokenIdentity({
+    this.sub,
+    this.email,
+    this.roles = const [],
+    this.tenantId,
+  });
+
+  String get displayName {
+    final value = email?.trim();
+    if (value != null && value.isNotEmpty) return value;
+    final principal = sub?.trim();
+    if (principal != null && principal.isNotEmpty) return principal;
+    return 'Authenticated token';
+  }
+
+  factory TokenIdentity.fromClaims(Map<String, dynamic> claims) {
+    final roleValues = <String>[];
+    final role = claims['role'];
+    final roles = claims['roles'];
+    if (role is String && role.isNotEmpty) roleValues.add(role);
+    if (roles is List) {
+      roleValues.addAll(
+        roles
+            .map((value) => value.toString())
+            .where((value) => value.isNotEmpty),
+      );
+    } else if (roles is String && roles.isNotEmpty) {
+      roleValues.add(roles);
+    }
+
+    return TokenIdentity(
+      sub: claims['sub'] as String?,
+      email: (claims['email'] ?? claims['preferred_username']) as String?,
+      roles: roleValues.toSet().toList(growable: false),
+      tenantId:
+          (claims['tenant_id'] ??
+                  claims['synapse_tenant'] ??
+                  claims['tid'] ??
+                  claims['tenant'])
+              as String?,
+    );
+  }
+
+  static TokenIdentity? tryParseJwt(String? token) {
+    if (token == null) return null;
+    final parts = token.split('.');
+    if (parts.length < 2) return null;
+    try {
+      final payload = utf8.decode(
+        base64Url.decode(base64Url.normalize(parts[1])),
+      );
+      final claims = jsonDecode(payload);
+      if (claims is! Map<String, dynamic>) return null;
+      return TokenIdentity.fromClaims(claims);
+    } catch (_) {
+      return null;
+    }
   }
 }
 
