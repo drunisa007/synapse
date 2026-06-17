@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../ui/synapse_tokens.dart';
+import 'markdown_text.dart';
+
 class VerdictCard extends StatelessWidget {
   final String? verdict;
   final double? consensusScore;
@@ -56,10 +59,7 @@ class VerdictCard extends StatelessWidget {
             ),
             if (verdict != null) ...[
               const SizedBox(height: 8),
-              SelectableText(
-                verdict!,
-                style: const TextStyle(fontSize: 14, height: 1.5),
-              ),
+              SynMarkdownText(data: verdict!, fontSize: 14),
             ],
             if (consensusScore != null) ...[
               const SizedBox(height: 12),
@@ -98,18 +98,18 @@ class VerdictCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withAlpha(30),
+                  color: SynColors.amber.withAlpha(30),
                   borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: Colors.orange, width: 1),
+                  border: Border.all(color: SynColors.amber, width: 1),
                 ),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.warning_amber, color: Colors.orange, size: 14),
+                    Icon(Icons.warning_amber, color: SynColors.amber, size: 14),
                     SizedBox(width: 4),
                     Text(
                       'Dissent detected',
-                      style: TextStyle(color: Colors.orange, fontSize: 12),
+                      style: TextStyle(color: SynColors.amber, fontSize: 12),
                     ),
                   ],
                 ),

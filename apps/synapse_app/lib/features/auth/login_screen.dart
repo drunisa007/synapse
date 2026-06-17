@@ -4,8 +4,8 @@ import 'package:casdoor_flutter_sdk/casdoor_flutter_sdk.dart'
     show AuthConfig, Casdoor;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
 
+import '../../core/api/client.dart';
 import '../../core/auth/token_store.dart';
 import '../../core/config/server_store.dart';
 import '../../core/routing/app_paths.dart';
@@ -13,11 +13,13 @@ import '../../core/routing/app_paths.dart';
 class LoginScreen extends StatefulWidget {
   final TokenStore tokenStore;
   final ServerStore serverStore;
+  final SynapseApiClient apiClient;
 
   const LoginScreen({
     super.key,
     required this.tokenStore,
     required this.serverStore,
+    required this.apiClient,
   });
 
   @override
@@ -140,27 +142,19 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final uri = Uri.parse('${_serverUrl!}/v1/auth/login');
-      final response = await http
-          .post(
-            uri,
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'email': email, 'password': password}),
-          )
-          .timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body) as Map<String, dynamic>;
-        final token = body['access_token'] as String?;
-        if (token != null) {
-          await widget.tokenStore.setToken(token);
-          if (mounted) context.go('/councils');
-        }
-      } else if (response.statusCode == 401) {
-        setState(() => _error = 'Invalid email or password.');
-      } else {
-        setState(() => _error = 'Login failed (${response.statusCode}).');
-      }
+      final token = await widget.apiClient.loginLocalUser(
+        email: email,
+        password: password,
+      );
+      await widget.tokenStore.setToken(token.accessToken);
+      if (mounted) context.go('/councils');
+    } on ApiException catch (e) {
+      final message = switch (e.statusCode) {
+        401 => 'Invalid email or password.',
+        501 => 'Local auth is not enabled on this server.',
+        _ => e.message,
+      };
+      setState(() => _error = message);
     } catch (e) {
       setState(
         () => _error =
@@ -280,6 +274,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     passwordController: _passwordController,
                     loading: _loading,
                     onSubmit: _loginLocal,
+                    onRegister: () => context.go(AppPaths.register),
                   ),
                 ] else ...[
                   _TokenPastePanel(
@@ -308,20 +303,32 @@ class _OidcLoginPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ElevatedButton.icon(
-      onPressed: loading ? null : onTap,
-      icon: loading
-          ? const SizedBox(
-              height: 18,
-              width: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : const Icon(Icons.login),
-      label: const Text('Sign in with Casdoor'),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF6366F1),
-        padding: const EdgeInsets.symmetric(vertical: 14),
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _AuthModeLabel(
+          icon: Icons.verified_user_outlined,
+          title: 'OIDC / Casdoor',
+          subtitle:
+              'Sign in with the identity provider configured by this server.',
+        ),
+        const SizedBox(height: 16),
+        ElevatedButton.icon(
+          onPressed: loading ? null : onTap,
+          icon: loading
+              ? const SizedBox(
+                  height: 18,
+                  width: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.login),
+          label: const Text('Sign in with Casdoor'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF6366F1),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -333,12 +340,14 @@ class _LocalLoginPanel extends StatelessWidget {
   final TextEditingController passwordController;
   final bool loading;
   final VoidCallback onSubmit;
+  final VoidCallback onRegister;
 
   const _LocalLoginPanel({
     required this.emailController,
     required this.passwordController,
     required this.loading,
     required this.onSubmit,
+    required this.onRegister,
   });
 
   @override
@@ -346,6 +355,13 @@ class _LocalLoginPanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const _AuthModeLabel(
+          icon: Icons.person_outline,
+          title: 'Local account',
+          subtitle:
+              'Use the email and password account on this Synapse server.',
+        ),
+        const SizedBox(height: 16),
         TextField(
           controller: emailController,
           autofocus: true,
@@ -384,6 +400,11 @@ class _LocalLoginPanel extends StatelessWidget {
                 )
               : const Text('Sign in'),
         ),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: loading ? null : onRegister,
+          child: const Text('Create account'),
+        ),
       ],
     );
   }
@@ -409,6 +430,12 @@ class _TokenPastePanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const _AuthModeLabel(
+          icon: Icons.vpn_key_outlined,
+          title: 'Bearer token / API key',
+          subtitle: 'Paste a development token or machine access token.',
+        ),
+        const SizedBox(height: 16),
         if (currentPrefix != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -442,6 +469,41 @@ class _TokenPastePanel extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Text('Save & Continue'),
+        ),
+      ],
+    );
+  }
+}
+
+class _AuthModeLabel extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _AuthModeLabel({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: const Color(0xFF6366F1)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+            ],
+          ),
         ),
       ],
     );

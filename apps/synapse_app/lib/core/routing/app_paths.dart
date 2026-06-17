@@ -13,6 +13,7 @@ abstract class AppPaths {
   // ── Auth / setup ──────────────────────────────────────────────────────
   static const serverSetup = '/server-setup';
   static const login = '/login';
+  static const register = '/register';
 
   // ── Councils ──────────────────────────────────────────────────────────
   static const councilList = '/councils';
@@ -32,6 +33,7 @@ abstract class AppPaths {
 
   // ── Settings & adjacents ──────────────────────────────────────────────
   static const settings = '/settings';
+  static const settingsProfile = '/settings/profile';
   static const settingsNotifications = '/settings/notifications';
   static const notifications = '/notifications';
   static const memory = '/memory';
@@ -45,6 +47,7 @@ abstract class AppPaths {
     AppNames.homeScreen: home,
     AppNames.serverSetupScreen: serverSetup,
     AppNames.loginScreen: login,
+    AppNames.registerScreen: register,
     AppNames.councilListScreen: councilList,
     AppNames.councilCreateScreen: councilCreate,
     AppNames.councilDetailScreen: councilDetailTemplate,
@@ -53,6 +56,7 @@ abstract class AppPaths {
     AppNames.chatSessionsScreen: chatSessions,
     AppNames.chatSessionDetailScreen: chatSessionDetailTemplate,
     AppNames.settingsScreen: settings,
+    AppNames.profileScreen: settingsProfile,
     AppNames.notificationsSettingsScreen: settingsNotifications,
     AppNames.notificationsScreen: notifications,
     AppNames.memoryScreen: memory,

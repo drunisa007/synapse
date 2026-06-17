@@ -77,6 +77,48 @@ class SynapseApiClient {
     return const [];
   }
 
+  Future<CurrentUser> getCurrentUser() async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('$baseUrl/v1/auth/me');
+    final response = await _httpClient.get(uri, headers: headers);
+    _checkResponse(response);
+    return CurrentUser.fromJson(
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
+    );
+  }
+
+  Future<AuthToken> loginLocalUser({
+    required String email,
+    required String password,
+  }) async {
+    final uri = Uri.parse('$baseUrl/v1/auth/login');
+    final response = await _httpClient.post(
+      uri,
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'password': password}),
+    );
+    _checkResponse(response);
+    return AuthToken.fromJson(
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
+    );
+  }
+
+  Future<AuthToken> registerLocalUser({
+    required String email,
+    required String password,
+  }) async {
+    final uri = Uri.parse('$baseUrl/v1/auth/register');
+    final response = await _httpClient.post(
+      uri,
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'password': password}),
+    );
+    _checkResponse(response);
+    return AuthToken.fromJson(
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
+    );
+  }
+
   Future<List<CouncilSummary>> listCouncils({
     int limit = 50,
     int offset = 0,

@@ -8,7 +8,7 @@ council_type: llm
 topic_tag: null
 
 members:
-  - model_id: anthropic/claude-3-7-sonnet-20250219
+  - model_id: openai/gpt-4o
     name: Senior Analyst
     role: >
       You are a senior generalist analyst. Reason carefully and systematically.
@@ -16,7 +16,7 @@ members:
       evidence or reasoning, (3) key uncertainties or caveats.
 
 chairman:
-  model_id: anthropic/claude-3-7-sonnet-20250219
+  model_id: openai/gpt-4o
   name: Senior Analyst
   role: >
     You are a senior generalist analyst. Synthesise the analysis into a clear,
