@@ -43,6 +43,97 @@ class CreateCouncilRequest(BaseModel):
     run_at: datetime | None = None  # UTC timestamp to start; None = immediate
 
 
+class CouncilReviewSelectedContextSummary(BaseModel):
+    detail_level: str | None = None
+    availability: str | None = None
+    summary: dict[str, Any] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class CouncilReviewContextRef(BaseModel):
+    kind: str
+    id: str | None = None
+    label: str | None = None
+    metadata: dict[str, str] = Field(default_factory=dict)
+
+
+class CouncilReviewProposedAction(BaseModel):
+    kind: str
+    title: str | None = None
+    summary: str | None = None
+    goal: str | None = None
+    decision_kind: str | None = None
+    proposal_ids: list[str] = Field(default_factory=list)
+    scenario_ids: list[str] = Field(default_factory=list)
+    context_ref: CouncilReviewContextRef | None = None
+
+
+class CouncilReviewRiskSignals(BaseModel):
+    risk_level: str | None = None
+    confidence_label: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+    requires_human_review: bool = False
+
+
+class CouncilReviewMemoryScope(BaseModel):
+    workspace_id: str
+    scope_kind: str
+    scope_id: str
+    retention: str
+
+
+class CouncilReviewRequest(BaseModel):
+    contract_version: str
+    workspace_id: str
+    actor_id: str
+    request_id: str
+    source: str
+    mode: str
+    template: str | None = None
+    selected_context_summaries: list[CouncilReviewSelectedContextSummary] = Field(
+        default_factory=list
+    )
+    proposed_action: CouncilReviewProposedAction
+    risk_signals: CouncilReviewRiskSignals
+    memory_scope: CouncilReviewMemoryScope
+    retention: str
+
+
+class CouncilReviewAgentPosition(BaseModel):
+    agent_id: str | None = None
+    agent_label: str
+    position: str
+    confidence_label: str | None = None
+    summary: str
+    dissent: bool = False
+    rank: int | None = None
+
+
+class CouncilReviewResponse(BaseModel):
+    contract_version: str
+    workspace_id: str
+    actor_id: str
+    request_id: str
+    mode: str
+    review_id: str | None = None
+    status: str
+    stage: str
+    selected_context_summaries: list[CouncilReviewSelectedContextSummary] = Field(
+        default_factory=list
+    )
+    proposed_action: CouncilReviewProposedAction
+    recommendation: str
+    summary: str
+    confidence_label: str
+    rationale: list[str] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
+    dissent: list[str] = Field(default_factory=list)
+    agent_positions: list[CouncilReviewAgentPosition] = Field(default_factory=list)
+    risk_signals: CouncilReviewRiskSignals
+    memory_scope: CouncilReviewMemoryScope
+    updated_at: str | None = None
+
+
 class ContributeRequest(BaseModel):
     """Body for POST /v1/councils/{id}/contribute (B3)."""
 

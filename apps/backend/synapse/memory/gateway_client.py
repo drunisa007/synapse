@@ -58,11 +58,14 @@ class AstrocyteGatewayClient:
 
     def _headers(self, context: AstrocyteContext) -> dict[str, str]:
         """Build headers for api_key auth mode: X-Api-Key + X-Astrocyte-Principal."""
-        return {
+        headers = {
             "X-Api-Key": self._api_key,
             "X-Astrocyte-Principal": context.principal,
             "Content-Type": "application/json",
         }
+        if context.request_id:
+            headers["X-Request-Id"] = context.request_id
+        return headers
 
     async def retain(
         self,

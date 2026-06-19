@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
+import time
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -16,6 +18,7 @@ from synapse.council.convergence import check_convergence
 from synapse.council.models import (
     CouncilMember,
     CouncilResult,
+    CouncilReviewRequest,
     DeliberationRound,
     MemberCritique,
     StageOneResponse,
@@ -67,6 +70,7 @@ class CouncilOrchestrator:
         council_type: str = "llm",
         topic_tag: str | None = None,
         human_turns: list[str] | None = None,
+        council_review: CouncilReviewRequest | None = None,
     ) -> CouncilResult | None:
         """Run the full council pipeline.
 
@@ -96,15 +100,40 @@ class CouncilOrchestrator:
         # --- Recall precedents ---
         await set_status(CouncilStatus.pending)
         precedents: list[MemoryHit] = []
+        recall_started_at = time.perf_counter()
         try:
+            recall_tags = self._council_review_memory_tags(council_review)
             precedents = await self._astrocyte.recall(
-                query=question,
+                query=self._council_review_memory_query(question, council_review),
                 bank_id=Banks.PRECEDENTS,
                 context=context,
                 max_results=self._settings.max_precedents,
+                tags=recall_tags,
+            )
+            if recall_tags and not precedents:
+                precedents = await self._astrocyte.recall(
+                    query=self._council_review_memory_query(question, council_review),
+                    bank_id=Banks.PRECEDENTS,
+                    context=context,
+                    max_results=self._settings.max_precedents,
+                )
+            self._log_observation(
+                "synapse.council.memory_recall",
+                request_id=self._observation_request_id(council_review, context),
+                council_id=council_id,
+                latency_seconds=time.perf_counter() - recall_started_at,
+                verdict_status="context_ready",
             )
         except Exception as e:
-            _logger.warning("Precedent recall failed: %s — continuing without precedents", e)
+            self._log_observation(
+                "synapse.council.memory_recall",
+                request_id=self._observation_request_id(council_review, context),
+                council_id=council_id,
+                latency_seconds=time.perf_counter() - recall_started_at,
+                verdict_status="context_unavailable",
+                failure_reason=type(e).__name__,
+                level=logging.WARNING,
+            )
 
         await publish("precedents_ready", {"count": len(precedents)})
 
@@ -127,6 +156,7 @@ class CouncilOrchestrator:
                 topic_tag=topic_tag,
                 human_turns=human_turns or [],
                 publish=publish,
+                council_review=council_review,
             )
 
         stage1_responses = await run_gather(
@@ -255,6 +285,7 @@ class CouncilOrchestrator:
             human_turns=human_turns or [],
             publish=publish,
             set_status=set_status,
+            council_review=council_review,
         )
 
     # ---------------------------------------------------------------------------
@@ -275,6 +306,7 @@ class CouncilOrchestrator:
         topic_tag: str | None,
         human_turns: list[str],
         publish,
+        council_review: CouncilReviewRequest | None = None,
     ) -> CouncilResult | None:
         """Stage 1 for async councils.
 
@@ -357,6 +389,7 @@ class CouncilOrchestrator:
                     human_turns=human_turns,
                     publish=publish,
                     set_status=set_status,
+                    council_review=council_review,
                 )
 
         # Quorum not yet met — park and wait for human contributions
@@ -446,9 +479,11 @@ class CouncilOrchestrator:
         # Reconstruct from DB
         members = [CouncilMember(**m) for m in session.members]
         chairman = CouncilMember(**session.chairman)
+        council_review = self._council_review_from_session(session)
         context = AstrocyteContext(
             principal=session.created_by,
             tenant_id=session.tenant_id,
+            request_id=council_review.request_id if council_review else None,
         )
 
         stage1_responses = [
@@ -462,15 +497,32 @@ class CouncilOrchestrator:
 
         # Re-recall precedents (original ones were not persisted yet)
         precedents: list = []
+        recall_started_at = time.perf_counter()
         try:
             precedents = await self._astrocyte.recall(
-                query=session.question,
+                query=self._council_review_memory_query(session.question, council_review),
                 bank_id=Banks.PRECEDENTS,
                 context=context,
                 max_results=self._settings.max_precedents,
+                tags=self._council_review_memory_tags(council_review),
+            )
+            self._log_observation(
+                "synapse.council.memory_recall",
+                request_id=self._observation_request_id(council_review, context),
+                council_id=council_id,
+                latency_seconds=time.perf_counter() - recall_started_at,
+                verdict_status="context_ready",
             )
         except Exception as e:
-            _logger.warning("Precedent recall failed during resume: %s", e)
+            self._log_observation(
+                "synapse.council.memory_recall",
+                request_id=self._observation_request_id(council_review, context),
+                council_id=council_id,
+                latency_seconds=time.perf_counter() - recall_started_at,
+                verdict_status="context_unavailable",
+                failure_reason=type(e).__name__,
+                level=logging.WARNING,
+            )
 
         await publish(
             "stage1_complete",
@@ -497,6 +549,7 @@ class CouncilOrchestrator:
             human_turns=[],
             publish=publish,
             set_status=set_status,
+            council_review=council_review,
         )
 
     # ---------------------------------------------------------------------------
@@ -520,6 +573,7 @@ class CouncilOrchestrator:
         human_turns: list[str],
         publish,
         set_status,
+        council_review: CouncilReviewRequest | None = None,
     ) -> CouncilResult:
         """Run Stage 2 (rank) + Stage 3 (synthesise) + conflict detection + persist."""
         council_id = str(session_id)
@@ -750,6 +804,7 @@ class CouncilOrchestrator:
                 topic_tag=topic_tag,
                 context=context,
                 human_turns=human_turns,
+                council_review=council_review,
             )
         )
 
@@ -807,6 +862,7 @@ class CouncilOrchestrator:
         topic_tag: str | None,
         context: AstrocyteContext,
         human_turns: list[str] | None = None,
+        council_review: CouncilReviewRequest | None = None,
     ) -> None:
         """Retain full transcript + verdict summary to Astrocyte. Fire-and-forget.
 
@@ -817,6 +873,9 @@ class CouncilOrchestrator:
         Reflection events (Mode 3 Q&A) are retained separately by the chat
         router at the point they occur, not here.
         """
+        if council_review and council_review.retention == "no_retain_council":
+            return
+        retain_started_at = time.perf_counter()
         try:
             # Full transcript → councils bank
             # Human turns are interleaved before agent responses so the
@@ -830,7 +889,9 @@ class CouncilOrchestrator:
             await self._astrocyte.retain(
                 content=full_transcript,
                 bank_id=Banks.COUNCILS,
-                tags=council_tags(council_type, topic_tag) + [session_id],
+                tags=council_tags(council_type, topic_tag)
+                + self._council_review_memory_tags(council_review)
+                + [session_id],
                 context=context,
                 metadata={"council_id": session_id, "consensus_score": consensus_score},
             )
@@ -844,7 +905,9 @@ class CouncilOrchestrator:
             await self._astrocyte.retain(
                 content=verdict_summary,
                 bank_id=Banks.DECISIONS,
-                tags=verdict_tags(council_type, topic_tag) + [session_id],
+                tags=verdict_tags(council_type, topic_tag)
+                + self._council_review_memory_tags(council_review)
+                + [session_id],
                 context=context,
                 metadata={
                     "council_id": session_id,
@@ -852,5 +915,117 @@ class CouncilOrchestrator:
                     "confidence_label": synthesis.confidence_label,
                 },
             )
+            self._log_observation(
+                "synapse.council.memory_retain",
+                request_id=self._observation_request_id(council_review, context),
+                council_id=session_id,
+                latency_seconds=time.perf_counter() - retain_started_at,
+                verdict_status="retained",
+            )
         except Exception as e:
-            _logger.error("Failed to retain council %s to Astrocyte: %s", session_id, e)
+            self._log_observation(
+                "synapse.council.memory_retain",
+                request_id=self._observation_request_id(council_review, context),
+                council_id=session_id,
+                latency_seconds=time.perf_counter() - retain_started_at,
+                verdict_status="retain_failed",
+                failure_reason=type(e).__name__,
+                level=logging.ERROR,
+            )
+
+    def _council_review_memory_query(
+        self,
+        question: str,
+        council_review: CouncilReviewRequest | None,
+    ) -> str:
+        if council_review is None:
+            return question
+        action = council_review.proposed_action
+        parts = [
+            action.summary or "",
+            action.goal or "",
+            action.decision_kind or action.kind,
+            " ".join(council_review.risk_signals.warnings[:8]),
+        ]
+        for summary in council_review.selected_context_summaries:
+            parts.extend(str(value) for value in summary.summary.values())
+        query = "\n".join(part for part in parts if part).strip()
+        return query or question
+
+    def _council_review_memory_tags(
+        self,
+        council_review: CouncilReviewRequest | None,
+    ) -> list[str]:
+        if council_review is None:
+            return []
+        scope = council_review.memory_scope
+        tags = []
+        if scope.workspace_id:
+            tags.append(f"workspace:{scope.workspace_id}")
+        if scope.scope_kind and scope.scope_id:
+            tags.append(f"{scope.scope_kind}:{scope.scope_id}")
+        return tags
+
+    def _council_review_from_session(self, session: CouncilSession) -> CouncilReviewRequest | None:
+        raw = (session.config or {}).get("council_review")
+        if raw is None:
+            return None
+        try:
+            return CouncilReviewRequest.model_validate(raw)
+        except Exception as e:
+            self._log_observation(
+                "synapse.council.contract",
+                request_id="",
+                council_id=str(session.id),
+                latency_seconds=0,
+                verdict_status="contract_invalid",
+                failure_reason=type(e).__name__,
+                level=logging.WARNING,
+            )
+            return None
+
+    def _observation_request_id(
+        self,
+        council_review: CouncilReviewRequest | None,
+        context: AstrocyteContext | None,
+    ) -> str:
+        if council_review is not None and council_review.request_id:
+            return council_review.request_id
+        if context is not None and context.request_id:
+            return context.request_id
+        return ""
+
+    def _log_observation(
+        self,
+        event: str,
+        *,
+        request_id: str,
+        council_id: str,
+        latency_seconds: float,
+        verdict_status: str,
+        failure_reason: str = "none",
+        level: int = logging.INFO,
+    ) -> None:
+        _logger.log(
+            level,
+            "event=%s request_id_hash=%s council_id_hash=%s latency_ms=%d verdict_status=%s failure_reason=%s",
+            self._safe_observation_value(event, max_chars=80) or "synapse.council",
+            self._observation_hash(request_id),
+            self._observation_hash(council_id),
+            max(0, int(latency_seconds * 1000)),
+            self._safe_observation_value(verdict_status, max_chars=80) or "unknown",
+            self._safe_observation_value(failure_reason, max_chars=120) or "none",
+        )
+
+    def _observation_hash(self, value: object) -> str:
+        text = self._safe_observation_value(value)
+        if not text:
+            return "none"
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+    def _safe_observation_value(self, value: object, *, max_chars: int = 128) -> str:
+        text = str(value or "").strip()
+        if not text:
+            return ""
+        text = "".join(ch for ch in text if ord(ch) >= 0x20 and ord(ch) != 0x7F)
+        return text[:max_chars]

@@ -8,6 +8,7 @@ from typing import Any
 
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from synapse.council.models import ContributeRequest, CouncilMember, CreateCouncilRequest
 from synapse.db.models import CouncilSession, CouncilStatus
@@ -143,7 +144,13 @@ async def get_session(
     background workers, the orchestrator, audit emitters, etc.) which
     operates with a system identity rather than a user JWT.
     """
-    session = await db.get(CouncilSession, session_id)
+    stmt = (
+        select(CouncilSession)
+        .options(selectinload(CouncilSession.transcript))
+        .where(CouncilSession.id == session_id)
+    )
+    result = await db.execute(stmt)
+    session = result.scalar_one_or_none()
     if session is None:
         return None
     if tenant_id is ...:

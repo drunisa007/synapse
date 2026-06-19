@@ -13,6 +13,7 @@ class AstrocyteContext:
 
     principal: str
     tenant_id: str | None = None
+    request_id: str | None = None
 
 
 def build_context(user: AuthenticatedUser) -> AstrocyteContext:
