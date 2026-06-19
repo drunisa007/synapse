@@ -47,6 +47,30 @@ async def test_retain_sends_auth_headers():
 
 
 @pytest.mark.asyncio
+async def test_retain_propagates_request_id_header():
+    async with AsyncClient() as http:
+        gw = AstrocyteGatewayClient(base_url=BASE_URL, api_key=API_KEY, http_client=http)
+
+        with respx.mock(base_url=BASE_URL) as mock:
+            mock.post("/v1/retain").respond(200, json={"memory_id": "mem-1", "stored": True})
+
+            await gw.retain(
+                content="Test content",
+                bank_id="decisions",
+                tags=["t1"],
+                context=AstrocyteContext(
+                    principal="user-1",
+                    tenant_id="tenant-test",
+                    request_id="creq-1",
+                ),
+                metadata={},
+            )
+
+            request = mock.calls.last.request
+            assert request.headers["x-request-id"] == "creq-1"
+
+
+@pytest.mark.asyncio
 async def test_recall_returns_memory_hits():
     async with AsyncClient() as http:
         gw = AstrocyteGatewayClient(base_url=BASE_URL, api_key=API_KEY, http_client=http)
