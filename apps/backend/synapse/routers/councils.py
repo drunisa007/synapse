@@ -162,6 +162,8 @@ def _council_review_question(fallback: str, contract: CouncilReviewRequest) -> s
             )
         if item.warnings:
             lines.append("Context warnings: " + "; ".join(item.warnings[:8]))
+    if contract.steering_context and contract.steering_context.summaries:
+        lines.append("Steering used: " + "; ".join(contract.steering_context.summaries[:8]))
     if not action.summary and fallback:
         lines.append(f"Review prompt: {fallback[:2000]}")
     lines.append("Return a summary, recommendation, confidence, reasons, risks, and dissent.")
@@ -928,6 +930,7 @@ def _council_review_response(s) -> dict | None:
         status=status_value,
         stage=stage,
         selected_context_summaries=contract.selected_context_summaries,
+        steering_context=contract.steering_context,
         proposed_action=contract.proposed_action,
         recommendation=recommendation,
         summary=summary,
@@ -993,6 +996,20 @@ def _sanitize_council_review(contract: CouncilReviewRequest) -> CouncilReviewReq
             if _safe_council_text(key, fallback="") and _safe_council_text(value, fallback="")
         }
     data["proposed_action"] = proposed
+    if steering := data.get("steering_context"):
+        for key in (
+            "risk_appetite",
+            "preferred_strategy",
+            "avoid_actions",
+            "required_assumptions",
+            "time_horizon",
+            "liquidity_preference",
+            "tax_sensitivity",
+        ):
+            if key in steering:
+                steering[key] = _safe_council_text(steering.get(key), fallback="")
+        steering["summaries"] = _safe_council_list(steering.get("summaries", []))
+        data["steering_context"] = steering
     risk = data.get("risk_signals", {})
     risk["risk_level"] = _safe_council_text(risk.get("risk_level"), fallback="")
     risk["confidence_label"] = _safe_council_text(risk.get("confidence_label"), fallback="")

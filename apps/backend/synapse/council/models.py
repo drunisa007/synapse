@@ -82,6 +82,17 @@ class CouncilReviewMemoryScope(BaseModel):
     retention: str
 
 
+class CouncilReviewSteeringContext(BaseModel):
+    risk_appetite: str | None = None
+    preferred_strategy: str | None = None
+    avoid_actions: str | None = None
+    required_assumptions: str | None = None
+    time_horizon: str | None = None
+    liquidity_preference: str | None = None
+    tax_sensitivity: str | None = None
+    summaries: list[str] = Field(default_factory=list)
+
+
 class CouncilReviewRequest(BaseModel):
     contract_version: str
     workspace_id: str
@@ -93,6 +104,7 @@ class CouncilReviewRequest(BaseModel):
     selected_context_summaries: list[CouncilReviewSelectedContextSummary] = Field(
         default_factory=list
     )
+    steering_context: CouncilReviewSteeringContext | None = None
     proposed_action: CouncilReviewProposedAction
     risk_signals: CouncilReviewRiskSignals
     memory_scope: CouncilReviewMemoryScope
@@ -121,6 +133,7 @@ class CouncilReviewResponse(BaseModel):
     selected_context_summaries: list[CouncilReviewSelectedContextSummary] = Field(
         default_factory=list
     )
+    steering_context: CouncilReviewSteeringContext | None = None
     proposed_action: CouncilReviewProposedAction
     recommendation: str
     summary: str

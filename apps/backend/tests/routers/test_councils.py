@@ -236,7 +236,23 @@ def test_create_council_accepts_settings_alias_for_config(client, db_session, he
 
 def test_create_council_accepts_council_review_payload(client, db_session, headers):
     captured: dict = {}
-    contract_fixture = _council_review_payload()
+    contract_fixture = {
+        **_council_review_payload(),
+        "steering_context": {
+            "risk_appetite": "conservative",
+            "preferred_strategy": "Reduce debt without touching reserves.",
+            "avoid_actions": "raw_prompt hide this",
+            "required_assumptions": "Income stays stable.",
+            "time_horizon": "five_years",
+            "liquidity_preference": "preserve_cash",
+            "tax_sensitivity": "tax_aware",
+            "summaries": [
+                "Risk appetite: Conservative",
+                "Preferred strategy: Reduce debt without touching reserves.",
+                "raw_prompt hide this",
+            ],
+        },
+    }
 
     async def fake_create_session(**kwargs):
         captured["request"] = kwargs["request"]
@@ -278,6 +294,17 @@ def test_create_council_accepts_council_review_payload(client, db_session, heade
     assert contract["request_id"] == contract_fixture["request_id"]
     assert contract_fixture["proposed_action"]["summary"] in request.question
     assert "Selected context summary" in request.question
+    assert "Steering used" in request.question
+    assert "Preferred strategy: Reduce debt without touching reserves." in request.question
+    assert "raw_prompt" not in request.question
+    assert contract["steering_context"]["preferred_strategy"] == (
+        "Reduce debt without touching reserves."
+    )
+    assert contract["steering_context"].get("avoid_actions", "") == ""
+    assert contract["steering_context"]["summaries"] == [
+        "Risk appetite: Conservative",
+        "Preferred strategy: Reduce debt without touching reserves.",
+    ]
     assert "transport fallback prompt" not in request.question
     assert (
         create_thread_mock.call_args.kwargs["title"] == contract_fixture["proposed_action"]["title"]
