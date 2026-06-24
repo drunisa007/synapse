@@ -7,9 +7,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from synapse.council.models import ConflictResult, CouncilMember, CouncilResult
+from synapse.council.models import (
+    ConflictResult,
+    CouncilMember,
+    CouncilResult,
+    CouncilReviewRequest,
+)
 from synapse.council.orchestrator import CouncilOrchestrator
 from synapse.memory.context import AstrocyteContext
+from tests.council_review_fixtures import council_review_contract_fixture
 
 # Patch targets for B5/B6 additions
 _NO_THREAD = patch(
@@ -211,3 +217,43 @@ async def test_orchestrator_continues_without_precedents(
         )
 
     assert isinstance(result, CouncilResult)
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_uses_council_review_memory_scope_and_skips_no_retain(
+    orchestrator, mock_db, two_members, chairman, context
+):
+    contract = CouncilReviewRequest.model_validate(council_review_contract_fixture("approve"))
+
+    with patch("synapse.council.orchestrator.asyncio.create_task"), _NO_THREAD, _NO_CONFLICT:
+        result = await orchestrator.run(
+            session_id=uuid.uuid4(),
+            question="Fallback question",
+            members=two_members,
+            chairman=chairman,
+            context=context,
+            db=mock_db,
+            council_type="llm",
+            council_review=contract,
+        )
+
+    assert isinstance(result, CouncilResult)
+    recall_kwargs = orchestrator._astrocyte.recall.call_args.kwargs
+    assert recall_kwargs["tags"] == [
+        f"workspace:{contract.workspace_id}",
+        f"project:{contract.memory_scope.scope_id}",
+    ]
+    assert contract.proposed_action.summary in recall_kwargs["query"]
+
+    await orchestrator._retain_to_astrocyte(
+        session_id="session-1",
+        question="Q?",
+        stage1_responses=[],
+        synthesis=MagicMock(verdict="Proceed.", confidence_label="medium"),
+        consensus_score=1.0,
+        council_type="llm",
+        topic_tag="council_review",
+        context=context,
+        council_review=contract,
+    )
+    orchestrator._astrocyte.retain.assert_not_called()

@@ -12,6 +12,11 @@ from fastapi.testclient import TestClient
 from synapse.db.models import CouncilSession, CouncilStatus
 from synapse.main import create_app
 from tests.conftest import TEST_SETTINGS, make_jwt
+from tests.council_review_fixtures import (
+    assert_no_forbidden_contract_fixture_fragments,
+    council_review_contract_fixture,
+    council_review_fixture,
+)
 
 # ---------------------------------------------------------------------------
 # App fixture with fully mocked infrastructure
@@ -110,6 +115,46 @@ def _make_council_session(**kwargs) -> CouncilSession:
     return obj
 
 
+def _make_council_transcript_from_agent_positions(agent_positions: list[dict]):
+    transcript = MagicMock()
+    stage1_responses = []
+    aggregate_scores = {}
+    for index, position in enumerate(agent_positions):
+        response_label = f"Response {chr(65 + index)}"
+        stage1_responses.append(
+            {
+                "member_id": f"openai/gpt-4o-internal-{index + 1}",
+                "member_name": position.get("agent_label", ""),
+                "content": position.get("summary", ""),
+                "confidence_label": position.get("confidence_label", ""),
+            }
+        )
+        aggregate_scores[response_label] = float(position.get("rank") or index + 1)
+    transcript.stage1_responses = stage1_responses
+    transcript.aggregate_scores = aggregate_scores
+    return transcript
+
+
+def _council_review_payload() -> dict:
+    return council_review_contract_fixture("approve")
+
+
+@pytest.mark.parametrize(
+    "fixture_name",
+    ["approve", "reject", "timeout", "unavailable_review_needed"],
+)
+def test_council_review_contract_fixtures_validate(fixture_name):
+    fixture = council_review_fixture(fixture_name)
+
+    assert fixture["schema_version"] == "council_review_fixture.v1"
+    assert fixture["expected_ui_status"] in {
+        "Approved",
+        "Rejected",
+        "Needs human review",
+    }
+    assert_no_forbidden_contract_fixture_fragments(fixture)
+
+
 # ---------------------------------------------------------------------------
 # POST /v1/councils
 # ---------------------------------------------------------------------------
@@ -187,6 +232,91 @@ def test_create_council_accepts_settings_alias_for_config(client, db_session, he
 
     assert resp.status_code == 202
     assert captured["config"] == {"mode": "deliberation", "x": 1}
+
+
+def test_create_council_accepts_council_review_payload(client, db_session, headers):
+    captured: dict = {}
+    contract_fixture = {
+        **_council_review_payload(),
+        "steering_context": {
+            "risk_appetite": "conservative",
+            "preferred_strategy": "Reduce debt without touching reserves.",
+            "avoid_actions": "raw_prompt hide this",
+            "required_assumptions": "Income stays stable.",
+            "time_horizon": "five_years",
+            "liquidity_preference": "preserve_cash",
+            "tax_sensitivity": "tax_aware",
+            "summaries": [
+                "Risk appetite: Conservative",
+                "Preferred strategy: Reduce debt without touching reserves.",
+                "raw_prompt hide this",
+            ],
+        },
+    }
+
+    async def fake_create_session(**kwargs):
+        captured["request"] = kwargs["request"]
+        return _make_council_session(id=uuid.uuid4(), status=CouncilStatus.pending)
+
+    mock_thread = MagicMock()
+    mock_thread.id = uuid.uuid4()
+    create_thread_mock = AsyncMock(return_value=mock_thread)
+    append_event_mock = AsyncMock(return_value=_make_thread_event(thread_id=mock_thread.id))
+    audit_emit_mock = AsyncMock()
+
+    with (
+        patch("synapse.routers.councils.asyncio.create_task"),
+        patch(
+            "synapse.routers.councils.create_session",
+            new=AsyncMock(side_effect=fake_create_session),
+        ),
+        patch("synapse.routers.councils.create_thread", new=create_thread_mock),
+        patch("synapse.routers.councils.append_event", new=append_event_mock),
+        patch("synapse.routers.councils.audit_emit", new=audit_emit_mock),
+    ):
+        resp = client.post(
+            "/v1/councils",
+            json={
+                "question": "transport fallback prompt",
+                "council_type": "llm",
+                "topic_tag": "council_review",
+                "settings": {"council_review": contract_fixture},
+            },
+            headers={**headers, "X-Request-Id": contract_fixture["request_id"]},
+        )
+
+    assert resp.status_code == 202
+    request = captured["request"]
+    contract = request.config["council_review"]
+    assert contract["contract_version"] == "council_review.v1"
+    assert contract["workspace_id"] == contract_fixture["workspace_id"]
+    assert contract["actor_id"] == contract_fixture["actor_id"]
+    assert contract["request_id"] == contract_fixture["request_id"]
+    assert contract_fixture["proposed_action"]["summary"] in request.question
+    assert "Selected context summary" in request.question
+    assert "Steering used" in request.question
+    assert "Preferred strategy: Reduce debt without touching reserves." in request.question
+    assert "raw_prompt" not in request.question
+    assert contract["steering_context"]["preferred_strategy"] == (
+        "Reduce debt without touching reserves."
+    )
+    assert contract["steering_context"].get("avoid_actions", "") == ""
+    assert contract["steering_context"]["summaries"] == [
+        "Risk appetite: Conservative",
+        "Preferred strategy: Reduce debt without touching reserves.",
+    ]
+    assert "transport fallback prompt" not in request.question
+    assert (
+        create_thread_mock.call_args.kwargs["title"] == contract_fixture["proposed_action"]["title"]
+    )
+    audit_metadata = audit_emit_mock.call_args.kwargs["metadata"]
+    assert "question_preview" not in audit_metadata
+    assert audit_metadata["request_id_hash"] != contract_fixture["request_id"]
+    assert contract_fixture["request_id"] not in str(audit_metadata)
+    started_metadata = append_event_mock.call_args.kwargs["metadata"]
+    assert "question" not in started_metadata
+    assert started_metadata["request_id_hash"] == audit_metadata["request_id_hash"]
+    assert contract_fixture["proposed_action"]["summary"] not in str(started_metadata)
 
 
 def test_create_council_promotes_settings_mode_red_team_to_council_type(
@@ -291,6 +421,42 @@ def test_get_council_returns_session(client, db_session, headers):
     body = resp.json()
     assert body["session_id"] == str(session_id)
     assert body["verdict"] == "Proceed with plan A."
+
+
+@pytest.mark.parametrize("fixture_name", ["approve", "reject"])
+def test_get_council_returns_shared_council_review_response(
+    client, db_session, headers, fixture_name
+):
+    fixture = council_review_fixture(fixture_name)
+    contract_fixture = fixture["request"]
+    synapse_response = fixture["synapse_get_response"]
+    agent_positions = synapse_response["council_review_response"]["agent_positions"]
+    session_id = uuid.uuid4()
+    mock_cs = _make_council_session(
+        id=session_id,
+        status=CouncilStatus.closed,
+        config={"council_review": contract_fixture},
+        verdict=synapse_response["verdict"],
+        confidence_label=synapse_response["confidence_label"],
+        dissent_detected=synapse_response["dissent_detected"],
+        conflict_metadata={},
+        transcript=_make_council_transcript_from_agent_positions(agent_positions),
+        created_at=datetime.fromisoformat(synapse_response["created_at"]),
+        closed_at=datetime.fromisoformat(synapse_response["closed_at"]),
+    )
+    db_session.get = AsyncMock(return_value=mock_cs)
+
+    with patch("synapse.routers.councils.get_session", new=AsyncMock(return_value=mock_cs)):
+        resp = client.get(f"/v1/councils/{session_id}", headers=headers)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["session_id"] == str(session_id)
+    assert body["verdict"] == synapse_response["verdict"]
+    review = body["council_review_response"]
+    assert review == synapse_response["council_review_response"]
+    assert "review_id" not in review
+    assert "openai/gpt-4o-internal" not in str(review)
 
 
 def test_get_council_404_on_missing(client, db_session, headers):
